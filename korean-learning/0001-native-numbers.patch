@@ -1,0 +1,294 @@
+From cb81c3184a0550bf86ead7b7645cd49002c06485 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 00:25:05 +0000
+Subject: [PATCH] =?UTF-8?q?=ED=95=9C=EA=B5=AD=EC=96=B4=20=EC=88=AB?=
+ =?UTF-8?q?=EC=9E=90:=20=EA=B3=A0=EC=9C=A0=EC=96=B4=20=EC=88=98=20?=
+ =?UTF-8?q?=EC=84=B8=EA=B8=B0(=ED=95=98=EB=82=98=C2=B7=EB=91=98=C2=B7?=
+ =?UTF-8?q?=EC=85=8B)=20=EB=8B=A8=EA=B3=84=20=EC=B6=94=EA=B0=80=20(?=
+ =?UTF-8?q?=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../tools/korean-numbers/NumbersPractice.tsx  | 39 ++++++++++++-------
+ content/en/tools.json                         | 13 ++++++-
+ content/ko/tools.json                         | 13 ++++++-
+ content/zh/tools.json                         | 13 ++++++-
+ lib/native-number.ts                          | 32 +++++++++++++++
+ 5 files changed, 89 insertions(+), 21 deletions(-)
+ create mode 100644 lib/native-number.ts
+
+diff --git a/app/[lang]/tools/korean-numbers/NumbersPractice.tsx b/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
+index b279a2e..de20477 100644
+--- a/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
++++ b/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
+@@ -4,49 +4,58 @@ import { useState } from "react";
+ import { Choice, toOptions } from "@/components/parts/Choice";
+ import { formatNumber } from "@/components/parts/Calculator";
+ import { numberToKorean } from "@/lib/korean-number";
++import { randomCount } from "@/lib/native-number";
+ import { speakKorean } from "@/lib/speech";
+ import { useStoredJSON } from "@/lib/storage";
+ import type { ToolUi } from "@/lib/content";
+ 
+-type Level = "easy" | "medium" | "hard";
++type Level = "easy" | "medium" | "hard" | "native";
++// 문제 하나: n = 정답 숫자, text = 읽어 주는 한국어, unit = 입력칸 옆 단위
++type Q = { n: number; text: string; unit: string };
+ 
+ // 단계별로 실제 가격처럼 보이는 숫자를 만들어요. (step 단위로 끊어서)
+-const RANGES: Record<Level, { min: number; max: number; step: number }> = {
++const RANGES: Record<Exclude<Level, "native">, { min: number; max: number; step: number }> = {
+   easy: { min: 100, max: 9_900, step: 100 },
+   medium: { min: 1_000, max: 99_500, step: 500 },
+   hard: { min: 10_000, max: 990_000, step: 1_000 },
+ };
+ 
+-function randomPrice(level: Level) {
++function randomQ(level: Level, won: string): Q {
++  if (level === "native") {
++    // 고유어 수: "사과 세 개"처럼 물건·사람·시각·나이를 세는 말
++    const c = randomCount();
++    return { n: c.n, text: c.text, unit: c.counter.ko };
++  }
+   const { min, max, step } = RANGES[level];
+   const count = Math.floor((max - min) / step) + 1;
+-  return min + Math.floor(Math.random() * count) * step;
++  const n = min + Math.floor(Math.random() * count) * step;
++  return { n, text: `${numberToKorean(n)} 원`, unit: won };
+ }
+ 
+ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+   const [level, setLevel] = useStoredJSON<Level>("kt:numbers:level", "easy");
+-  const [price, setPrice] = useState<number | null>(null);
++  const [price, setPrice] = useState<Q | null>(null);
+   const [guess, setGuess] = useState("");
+   const [result, setResult] = useState<"right" | "wrong" | null>(null);
+   const [streak, setStreak] = useState(0);
+ 
+-  const say = (n: number) => speakKorean(`${numberToKorean(n)} 원`);
++  const say = (q: Q) => speakKorean(q.text);
+ 
+   function play() {
+-    const n = price ?? randomPrice(level);
++    const n = price ?? randomQ(level, ui.won);
+     if (price === null) setPrice(n);
+     say(n);
+   }
+ 
+   function check() {
+     if (price === null || guess === "") return;
+-    const ok = Number(guess.replace(/[^0-9]/g, "")) === price;
++    const ok = Number(guess.replace(/[^0-9]/g, "")) === price.n;
+     setResult(ok ? "right" : "wrong");
+     setStreak(ok ? streak + 1 : 0);
+   }
+ 
+   function next() {
+-    const n = randomPrice(level);
++    const n = randomQ(level, ui.won);
+     setPrice(n);
+     setGuess("");
+     setResult(null);
+@@ -71,13 +80,13 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+       </div>
+ 
+       <button type="button" onClick={play} className="w-full rounded-2xl bg-brand py-5 text-xl font-bold text-brand-ink">
+-        🔊 {price === null ? ui.play : ui.replay}
++        🔊 {price === null ? (level === "native" ? ui.playCount : ui.play) : ui.replay}
+       </button>
+ 
+       {price !== null && (
+         <div className="space-y-3 rounded-2xl border border-line bg-card p-4">
+           <label className="block">
+-            <span className="mb-1 block font-semibold">{ui.answer}</span>
++            <span className="mb-1 block font-semibold">{level === "native" ? ui.answerCount : ui.answer}</span>
+             <span className="flex items-center rounded-xl border-2 border-line focus-within:border-brand">
+               <input
+                 inputMode="numeric"
+@@ -87,7 +96,7 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+                 disabled={result !== null}
+                 className="w-full min-w-0 rounded-xl bg-transparent px-4 py-3 text-2xl font-bold text-ink focus:outline-none"
+               />
+-              <span className="shrink-0 whitespace-nowrap pr-4 text-muted">{ui.won}</span>
++              <span className="shrink-0 whitespace-nowrap pr-4 text-muted">{price.unit}</span>
+             </span>
+           </label>
+ 
+@@ -99,17 +108,17 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+             <div aria-live="polite" className="space-y-3">
+               <div className={`rounded-xl p-3 ${result === "right" ? "bg-ok/10" : "bg-warn-bg"}`}>
+                 <p className="font-bold">
+-                  {result === "right" ? ui.correct : ui.wrong.replace("{n}", formatNumber(price))}
++                  {result === "right" ? ui.correct : (level === "native" ? ui.wrongCount : ui.wrong).replace("{n}", formatNumber(price.n))}
+                 </p>
+                 <p className="mt-1 text-sm">
+                   {ui.reading}:{" "}
+                   <b lang="ko" className="text-lg">
+-                    {numberToKorean(price)} 원
++                    {price.text}
+                   </b>
+                 </p>
+               </div>
+               <button type="button" onClick={next} className="w-full rounded-xl bg-brand py-3 font-semibold text-brand-ink">
+-                {ui.next} →
++                {level === "native" ? ui.nextCount : ui.next} →
+               </button>
+             </div>
+           )}
+diff --git a/content/en/tools.json b/content/en/tools.json
+index 19fcbea..31c6423 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1034,6 +1034,10 @@
+       {
+         "q": "I can't hear the audio.",
+         "a": "Your phone may not have a Korean voice. Android: Settings › Accessibility › Text-to-speech output, then install Korean voice data. iPhone: Settings › Accessibility › Read & Speak › Voices › Korean."
++      },
++      {
++        "q": "How do I practice 하나, 둘, 셋?",
++        "a": "Choose “Counting” as the level. You will hear things like 세 개 (3 items), 두 명 (2 people), 네 시 (4 o’clock) or 스무 살 (20 years old). Before a counter, 하나·둘·셋·넷·스물 become 한·두·세·네·스무."
+       }
+     ],
+     "ui": {
+@@ -1041,7 +1045,8 @@
+       "levels": {
+         "easy": "Easy (under 10,000)",
+         "medium": "Medium (under 100,000)",
+-        "hard": "Hard (under 1,000,000)"
++        "hard": "Hard (under 1,000,000)",
++        "native": "Counting (하나, 둘, 셋…)"
+       },
+       "play": "Play price",
+       "replay": "Play again",
+@@ -1052,7 +1057,11 @@
+       "wrong": "The answer was {n} won.",
+       "reading": "In Korean",
+       "next": "Next price",
+-      "streak": "Correct in a row"
++      "streak": "Correct in a row",
++      "playCount": "Play count",
++      "answerCount": "What number did you hear?",
++      "wrongCount": "The answer was {n}.",
++      "nextCount": "Next one"
+     }
+   },
+   "daily-quiz": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 2c2051a..2729fa6 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1034,6 +1034,10 @@
+       {
+         "q": "소리가 안 들려요.",
+         "a": "휴대폰에 한국어 음성이 없을 수 있어요. 안드로이드: 설정 › 접근성 › 텍스트 음성 변환 출력에서 한국어 음성 데이터를 설치하세요. 아이폰: 설정 › 손쉬운 사용 › 읽기 및 말하기 › 음성에서 한국어를 고르세요."
++      },
++      {
++        "q": "하나, 둘, 셋은 어떻게 연습해요?",
++        "a": "단계에서 \"세기\"를 고르세요. 세 개, 두 명, 네 시, 스무 살 같은 말이 나와요. 개·명·시 같은 단위 앞에서는 하나·둘·셋·넷·스물이 한·두·세·네·스무로 바뀌어요."
+       }
+     ],
+     "ui": {
+@@ -1041,7 +1045,8 @@
+       "levels": {
+         "easy": "쉬움 (1만 미만)",
+         "medium": "보통 (10만 미만)",
+-        "hard": "어려움 (100만 미만)"
++        "hard": "어려움 (100만 미만)",
++        "native": "세기 (하나, 둘, 셋…)"
+       },
+       "play": "가격 듣기",
+       "replay": "다시 듣기",
+@@ -1052,7 +1057,11 @@
+       "wrong": "정답은 {n}원이에요.",
+       "reading": "한국어로",
+       "next": "다음 가격",
+-      "streak": "연속 정답"
++      "streak": "연속 정답",
++      "playCount": "세는 말 듣기",
++      "answerCount": "몇이라고 들었나요?",
++      "wrongCount": "정답은 {n}이에요.",
++      "nextCount": "다음 문제"
+     }
+   },
+   "daily-quiz": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index fe769d8..14c4e3d 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1034,6 +1034,10 @@
+       {
+         "q": "听不到声音。",
+         "a": "你的手机可能没有韩语语音。安卓：设置 › 无障碍 › 文字转语音输出，然后安装韩语语音数据包。iPhone：设置 › 无障碍 › 阅读与朗读 › 声音 › 韩语。"
++      },
++      {
++        "q": "怎么练习 하나、둘、셋？",
++        "a": "在难度里选择“数数”。你会听到 세 개（3个）、두 명（2人）、네 시（4点）、스무 살（20岁）等。在量词前，하나·둘·셋·넷·스물 会变成 한·두·세·네·스무。"
+       }
+     ],
+     "ui": {
+@@ -1041,7 +1045,8 @@
+       "levels": {
+         "easy": "简单（1万以下）",
+         "medium": "中等（10万以下）",
+-        "hard": "困难（100万以下）"
++        "hard": "困难（100万以下）",
++        "native": "数数（하나、둘、셋…）"
+       },
+       "play": "播放价格",
+       "replay": "再听一遍",
+@@ -1052,7 +1057,11 @@
+       "wrong": "正确答案是{n}韩元。",
+       "reading": "韩语读法",
+       "next": "下一个价格",
+-      "streak": "连续答对"
++      "streak": "连续答对",
++      "playCount": "播放数量",
++      "answerCount": "你听到的是几？",
++      "wrongCount": "答案是 {n}。",
++      "nextCount": "下一题"
+     }
+   },
+   "daily-quiz": {
+diff --git a/lib/native-number.ts b/lib/native-number.ts
+new file mode 100644
+index 0000000..72a74d4
+--- /dev/null
++++ b/lib/native-number.ts
+@@ -0,0 +1,32 @@
++// 고유어 수(하나, 둘, 셋…)를 만들어요. 물건 세기·사람 수·시각(○시)·나이에 써요. 1~99만 있어요.
++// 단위(개·명·시·살…) 앞에서는 줄어든 꼴을 써요: 하나→한, 둘→두, 셋→세, 넷→네, 스물→스무 (스무 개, 스물한 개).
++const ONES = ["", "하나", "둘", "셋", "넷", "다섯", "여섯", "일곱", "여덟", "아홉"];
++const ONES_BEFORE_UNIT = ["", "한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉"];
++const TENS = ["", "열", "스물", "서른", "마흔", "쉰", "예순", "일흔", "여든", "아흔"];
++
++export function nativeKorean(n: number, beforeUnit = false): string {
++  if (!Number.isInteger(n) || n < 1 || n > 99) throw new RangeError("native numbers: 1-99 only");
++  const t = Math.floor(n / 10);
++  const o = n % 10;
++  if (o === 0) return beforeUnit && t === 2 ? "스무" : TENS[t];
++  return TENS[t] + (beforeUnit ? ONES_BEFORE_UNIT[o] : ONES[o]);
++}
++
++// 연습에 쓰는 단위. max는 실제로 자주 듣는 범위예요 (시는 1~12시).
++export const COUNTERS = [
++  { id: "items", ko: "개", max: 20 },
++  { id: "people", ko: "명", max: 20 },
++  { id: "hour", ko: "시", max: 12 },
++  { id: "age", ko: "살", max: 99 },
++  { id: "cups", ko: "잔", max: 10 },
++  { id: "bottles", ko: "병", max: 10 },
++  { id: "sheets", ko: "장", max: 20 },
++] as const;
++
++export type CounterId = (typeof COUNTERS)[number]["id"];
++
++export function randomCount() {
++  const c = COUNTERS[Math.floor(Math.random() * COUNTERS.length)];
++  const n = 1 + Math.floor(Math.random() * c.max);
++  return { counter: c, n, text: `${nativeKorean(n, true)} ${c.ko}` };
++}
+-- 
+2.43.0
+
