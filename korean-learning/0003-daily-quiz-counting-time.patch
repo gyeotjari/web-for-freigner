@@ -1,0 +1,179 @@
+From 94374c8898cd59cf0e524f9207d1beef55b66155 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 00:24:55 +0000
+Subject: [PATCH] =?UTF-8?q?=EC=98=A4=EB=8A=98=EC=9D=98=20=ED=80=B4?=
+ =?UTF-8?q?=EC=A6=88:=20=EC=88=AB=EC=9E=90=20=EB=AC=B8=EC=A0=9C=EB=A5=BC?=
+ =?UTF-8?q?=20=EA=B0=80=EA=B2=A9=C2=B7=EA=B3=A0=EC=9C=A0=EC=96=B4=20?=
+ =?UTF-8?q?=EC=84=B8=EA=B8=B0=C2=B7=EC=8B=9C=EA=B0=81=20=EC=A4=91=20?=
+ =?UTF-8?q?=ED=95=98=EB=82=98=EB=A1=9C=20(=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ app/[lang]/tools/daily-quiz/DailyQuiz.tsx | 73 +++++++++++++++++++----
+ content/en/tools.json                     |  4 +-
+ content/ko/tools.json                     |  4 +-
+ content/zh/tools.json                     |  4 +-
+ 4 files changed, 70 insertions(+), 15 deletions(-)
+
+diff --git a/app/[lang]/tools/daily-quiz/DailyQuiz.tsx b/app/[lang]/tools/daily-quiz/DailyQuiz.tsx
+index 8b99f00..173eaff 100644
+--- a/app/[lang]/tools/daily-quiz/DailyQuiz.tsx
++++ b/app/[lang]/tools/daily-quiz/DailyQuiz.tsx
+@@ -3,6 +3,7 @@
+ import { useMemo, useState } from "react";
+ import { formatNumber } from "@/components/parts/Calculator";
+ import { numberToKorean } from "@/lib/korean-number";
++import { COUNTERS, nativeKorean, sinoKorean, timeKorean } from "@/lib/native-number";
+ import { makeChoices, seededRandom, shuffle } from "@/lib/quiz";
+ import { speakKorean } from "@/lib/speech";
+ import { useIsClient, useStoredJSON } from "@/lib/storage";
+@@ -10,7 +11,7 @@ import type { ToolUi } from "@/lib/content";
+ 
+ type Ui = ToolUi<"daily-quiz">;
+ type Item = { ko: string; meaning: string };
+-type Question = { type: "meaning" | "sign" | "number"; prompt: string; speak?: string; answer: string; choices: string[] };
++type Question = { type: "meaning" | "sign" | "number" | "count" | "time"; prompt: string; speak?: string; answer: string; choices: string[] };
+ type Results = Record<string, { score: number; picks: string[] }>;
+ 
+ const TOTAL = 5;
+@@ -26,7 +27,54 @@ function hash(s: string) {
+   return h >>> 0;
+ }
+ 
+-// 날짜로 정해지는 오늘의 5문제: 문장 2 + 간판 2 + 가격 1
++// 숫자 문제 하나: 날마다 가격 / 고유어 세기 / 시각 중 하나를 돌아가며 내요.
++// 보기에는 외국인이 실제로 많이 틀리는 말(삼 개, 삼 시, 셋 개 등)을 넣어요.
++function numberQuestion(rand: () => number): Question {
++  const kind = Math.floor(rand() * 3);
++  if (kind === 1) {
++    // 세기: 3개 → 세 개 (한자어 '삼 개', 줄이지 않은 '셋 개'가 흔한 실수)
++    const units = COUNTERS.filter((c) => c.id !== "hour" && c.id !== "age");
++    const c = units[Math.floor(rand() * units.length)];
++    const n = 1 + Math.floor(rand() * 5); // 1~5: 줄어든 꼴(한·두·세·네)이 나오는 수
++    const right = `${nativeKorean(n, true)} ${c.ko}`;
++    // 틀린 보기 후보 (앞에 있을수록 흔한 실수). 다섯은 줄어든 꼴이 같아서 중복을 빼고 앞에서 3개만 써요.
++    const wrongs = [
++      `${sinoKorean(n)} ${c.ko}`,
++      `${nativeKorean(n)} ${c.ko}`,
++      `${nativeKorean(n === 5 ? 4 : n + 1, true)} ${c.ko}`,
++      `${nativeKorean(n + 2, true)} ${c.ko}`,
++    ].filter((w) => w !== right);
++    return { type: "count", prompt: `${n}${c.ko}`, answer: right, choices: shuffle([right, ...wrongs.slice(0, 3)], rand) };
++  }
++  if (kind === 2) {
++    // 시각: 3:20 → 세 시 이십 분 (시를 한자어로 읽는 '삼 시'가 흔한 실수)
++    const h = 1 + Math.floor(rand() * 12);
++    const m = (1 + Math.floor(rand() * 11)) * 5; // 5~55분
++    const right = timeKorean(h, m);
++    const wrongs = [
++      `${sinoKorean(h)} 시 ${sinoKorean(m)} 분`,
++      `${nativeKorean(h, true)} 시 ${nativeKorean(m, true)} 분`,
++      timeKorean(h === 12 ? 1 : h + 1, m),
++    ];
++    return {
++      type: "time",
++      prompt: `🕒 ${h}:${String(m).padStart(2, "0")}`,
++      answer: right,
++      choices: shuffle([right, ...wrongs.filter((w) => w !== right)].slice(0, 4), rand),
++    };
++  }
++  // 가격 문제: 헷갈리기 쉬운 비슷한 숫자를 보기로 넣어요
++  const price = (Math.floor(rand() * 90) + 10) * 500; // 5,000 ~ 49,500
++  const near = [price + 1000, price - 500, price * 10, price + 10000].filter((n) => n > 0 && n !== price);
++  return {
++    type: "number",
++    prompt: `₩${formatNumber(price)}`,
++    answer: `${numberToKorean(price)} 원`,
++    choices: shuffle([price, ...shuffle(near, rand).slice(0, 3)], rand).map((n) => `${numberToKorean(n)} 원`),
++  };
++}
++
++// 날짜로 정해지는 오늘의 5문제: 문장 2 + 간판 2 + 숫자 1 (가격·세기·시각 중 하나)
+ function buildQuiz(date: string, phrasePool: Item[], signPool: Item[]): Question[] {
+   const rand = seededRandom(hash(date));
+   const phrases = shuffle(phrasePool, rand).slice(0, 2);
+@@ -47,15 +95,7 @@ function buildQuiz(date: string, phrasePool: Item[], signPool: Item[]): Question
+       choices: makeChoices(s.meaning, signPool.map((x) => x.meaning), rand),
+     })),
+   ];
+-  // 가격 문제: 헷갈리기 쉬운 비슷한 숫자를 보기로 넣어요
+-  const price = (Math.floor(rand() * 90) + 10) * 500; // 5,000 ~ 49,500
+-  const near = [price + 1000, price - 500, price * 10, price + 10000].filter((n) => n > 0 && n !== price);
+-  qs.push({
+-    type: "number",
+-    prompt: `₩${formatNumber(price)}`,
+-    answer: `${numberToKorean(price)} 원`,
+-    choices: shuffle([price, ...shuffle(near, rand).slice(0, 3)], rand).map((n) => `${numberToKorean(n)} 원`),
+-  });
++  qs.push(numberQuestion(rand));
+   return shuffle(qs, rand).slice(0, TOTAL);
+ }
+ 
+@@ -147,7 +187,16 @@ function QuizBody({ ui, phrasePool, signPool }: { ui: Ui; phrasePool: Item[]; si
+ 
+   const q = questions[index];
+   const picked = picks[index];
+-  const label = q.type === "meaning" ? ui.typeMeaning : q.type === "sign" ? ui.typeSign : ui.typeNumber;
++  const label =
++    q.type === "meaning"
++      ? ui.typeMeaning
++      : q.type === "sign"
++        ? ui.typeSign
++        : q.type === "count"
++          ? ui.typeCount
++          : q.type === "time"
++            ? ui.typeTime
++            : ui.typeNumber;
+   const isLast = index === TOTAL - 1;
+ 
+   function choose(c: string) {
+diff --git a/content/en/tools.json b/content/en/tools.json
+index 1e452d4..7aaa27d 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1108,7 +1108,9 @@
+       "comeBack": "New questions tomorrow.",
+       "played": "Days played",
+       "streak": "Day streak",
+-      "review": "Review answers"
++      "review": "Review answers",
++      "typeCount": "How do you say this amount?",
++      "typeTime": "How do you read this time?"
+     }
+   },
+   "currency-converter": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 31c9842..0297c40 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1108,7 +1108,9 @@
+       "comeBack": "내일 새 문제가 나와요.",
+       "played": "푼 날",
+       "streak": "연속 일수",
+-      "review": "정답 다시 보기"
++      "review": "정답 다시 보기",
++      "typeCount": "이 개수는 어떻게 말해요?",
++      "typeTime": "이 시각은 어떻게 읽어요?"
+     }
+   },
+   "currency-converter": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index b5139de..363897c 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1108,7 +1108,9 @@
+       "comeBack": "明天有新题目。",
+       "played": "答题天数",
+       "streak": "连续天数",
+-      "review": "查看答案"
++      "review": "查看答案",
++      "typeCount": "这个数量怎么说？",
++      "typeTime": "这个时间怎么读？"
+     }
+   },
+   "currency-converter": {
+-- 
+2.43.0
+
