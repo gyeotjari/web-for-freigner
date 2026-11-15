@@ -1,0 +1,245 @@
+diff --git a/app/[lang]/tools/korean-numbers/NumbersPractice.tsx b/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
+index de20477..8997c2d 100644
+--- a/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
++++ b/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
+@@ -5,16 +5,18 @@ import { Choice, toOptions } from "@/components/parts/Choice";
+ import { formatNumber } from "@/components/parts/Calculator";
+ import { numberToKorean } from "@/lib/korean-number";
+ import { randomCount } from "@/lib/native-number";
++import { parseTime, randomTime } from "@/lib/korean-time";
+ import { speakKorean } from "@/lib/speech";
+ import { useStoredJSON } from "@/lib/storage";
+ import type { ToolUi } from "@/lib/content";
+ 
+-type Level = "easy" | "medium" | "hard" | "native";
++type Level = "easy" | "medium" | "hard" | "native" | "time";
+ // 문제 하나: n = 정답 숫자, text = 읽어 주는 한국어, unit = 입력칸 옆 단위
+-type Q = { n: number; text: string; unit: string };
++// 시각 단계는 n = 시×100+분 (3:20 → 320), shown = "3:20"
++type Q = { n: number; text: string; unit: string; shown?: string };
+ 
+ // 단계별로 실제 가격처럼 보이는 숫자를 만들어요. (step 단위로 끊어서)
+-const RANGES: Record<Exclude<Level, "native">, { min: number; max: number; step: number }> = {
++const RANGES: Record<Exclude<Level, "native" | "time">, { min: number; max: number; step: number }> = {
+   easy: { min: 100, max: 9_900, step: 100 },
+   medium: { min: 1_000, max: 99_500, step: 500 },
+   hard: { min: 10_000, max: 990_000, step: 1_000 },
+@@ -26,6 +28,11 @@ function randomQ(level: Level, won: string): Q {
+     const c = randomCount();
+     return { n: c.n, text: c.text, unit: c.counter.ko };
+   }
++  if (level === "time") {
++    // 시각: "세 시 이십 분" (시는 고유어, 분은 한자어)
++    const t = randomTime();
++    return { n: t.h * 100 + t.m, text: t.text, unit: "", shown: `${t.h}:${String(t.m).padStart(2, "0")}` };
++  }
+   const { min, max, step } = RANGES[level];
+   const count = Math.floor((max - min) / step) + 1;
+   const n = min + Math.floor(Math.random() * count) * step;
+@@ -49,7 +56,11 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+ 
+   function check() {
+     if (price === null || guess === "") return;
+-    const ok = Number(guess.replace(/[^0-9]/g, "")) === price.n;
++    let ok: boolean;
++    if (level === "time") {
++      const t = parseTime(guess);
++      ok = t !== null && t.h * 100 + t.m === price.n;
++    } else ok = Number(guess.replace(/[^0-9]/g, "")) === price.n;
+     setResult(ok ? "right" : "wrong");
+     setStreak(ok ? streak + 1 : 0);
+   }
+@@ -80,16 +91,17 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+       </div>
+ 
+       <button type="button" onClick={play} className="w-full rounded-2xl bg-brand py-5 text-xl font-bold text-brand-ink">
+-        🔊 {price === null ? (level === "native" ? ui.playCount : ui.play) : ui.replay}
++        🔊 {price === null ? (level === "native" ? ui.playCount : level === "time" ? ui.playTime : ui.play) : ui.replay}
+       </button>
+ 
+       {price !== null && (
+         <div className="space-y-3 rounded-2xl border border-line bg-card p-4">
+           <label className="block">
+-            <span className="mb-1 block font-semibold">{level === "native" ? ui.answerCount : ui.answer}</span>
++            <span className="mb-1 block font-semibold">{level === "native" ? ui.answerCount : level === "time" ? ui.answerTime : ui.answer}</span>
+             <span className="flex items-center rounded-xl border-2 border-line focus-within:border-brand">
+               <input
+-                inputMode="numeric"
++                inputMode={level === "time" ? "text" : "numeric"}
++                placeholder={level === "time" ? "3:20" : undefined}
+                 value={guess}
+                 onChange={(e) => setGuess(e.target.value)}
+                 onKeyDown={(e) => e.key === "Enter" && (result ? next() : check())}
+@@ -108,7 +120,11 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+             <div aria-live="polite" className="space-y-3">
+               <div className={`rounded-xl p-3 ${result === "right" ? "bg-ok/10" : "bg-warn-bg"}`}>
+                 <p className="font-bold">
+-                  {result === "right" ? ui.correct : (level === "native" ? ui.wrongCount : ui.wrong).replace("{n}", formatNumber(price.n))}
++                  {result === "right"
++                    ? ui.correct
++                    : level === "time"
++                      ? ui.wrongTime.replace("{t}", price.shown ?? "")
++                      : (level === "native" ? ui.wrongCount : ui.wrong).replace("{n}", formatNumber(price.n))}
+                 </p>
+                 <p className="mt-1 text-sm">
+                   {ui.reading}:{" "}
+@@ -118,7 +134,7 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+                 </p>
+               </div>
+               <button type="button" onClick={next} className="w-full rounded-xl bg-brand py-3 font-semibold text-brand-ink">
+-                {level === "native" ? ui.nextCount : ui.next} →
++                {level === "native" ? ui.nextCount : level === "time" ? ui.nextTime : ui.next} →
+               </button>
+             </div>
+           )}
+diff --git a/content/en/tools.json b/content/en/tools.json
+index 31c6423..04d7374 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1038,6 +1038,10 @@
+       {
+         "q": "How do I practice 하나, 둘, 셋?",
+         "a": "Choose “Counting” as the level. You will hear things like 세 개 (3 items), 두 명 (2 people), 네 시 (4 o’clock) or 스무 살 (20 years old). Before a counter, 하나·둘·셋·넷·스물 become 한·두·세·네·스무."
++      },
++      {
++        "q": "How do Koreans say the time?",
++        "a": "Hours use 하나, 둘, 셋 numbers (세 시 = 3 o’clock). Minutes use 일, 이, 삼 numbers (이십 분 = 20 minutes). 30 minutes is often 반 (세 시 반 = 3:30). Choose “Time” as the level to practice."
+       }
+     ],
+     "ui": {
+@@ -1046,7 +1050,8 @@
+         "easy": "Easy (under 10,000)",
+         "medium": "Medium (under 100,000)",
+         "hard": "Hard (under 1,000,000)",
+-        "native": "Counting (하나, 둘, 셋…)"
++        "native": "Counting (하나, 둘, 셋…)",
++        "time": "Time (세 시 이십 분)"
+       },
+       "play": "Play price",
+       "replay": "Play again",
+@@ -1061,7 +1066,11 @@
+       "playCount": "Play count",
+       "answerCount": "What number did you hear?",
+       "wrongCount": "The answer was {n}.",
+-      "nextCount": "Next one"
++      "nextCount": "Next one",
++      "playTime": "Play time",
++      "answerTime": "What time did you hear? (e.g. 3:20)",
++      "wrongTime": "The answer was {t}.",
++      "nextTime": "Next time"
+     }
+   },
+   "daily-quiz": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 2729fa6..4660d1c 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1038,6 +1038,10 @@
+       {
+         "q": "하나, 둘, 셋은 어떻게 연습해요?",
+         "a": "단계에서 \"세기\"를 고르세요. 세 개, 두 명, 네 시, 스무 살 같은 말이 나와요. 개·명·시 같은 단위 앞에서는 하나·둘·셋·넷·스물이 한·두·세·네·스무로 바뀌어요."
++      },
++      {
++        "q": "시각은 어떻게 읽어요?",
++        "a": "'시'는 하나·둘·셋으로 읽고(세 시), '분'은 일·이·삼으로 읽어요(이십 분). 30분은 '반'이라고도 해요(세 시 반). 단계에서 \"시각\"을 고르면 연습할 수 있어요."
+       }
+     ],
+     "ui": {
+@@ -1046,7 +1050,8 @@
+         "easy": "쉬움 (1만 미만)",
+         "medium": "보통 (10만 미만)",
+         "hard": "어려움 (100만 미만)",
+-        "native": "세기 (하나, 둘, 셋…)"
++        "native": "세기 (하나, 둘, 셋…)",
++        "time": "시각 (세 시 이십 분)"
+       },
+       "play": "가격 듣기",
+       "replay": "다시 듣기",
+@@ -1061,7 +1066,11 @@
+       "playCount": "세는 말 듣기",
+       "answerCount": "몇이라고 들었나요?",
+       "wrongCount": "정답은 {n}이에요.",
+-      "nextCount": "다음 문제"
++      "nextCount": "다음 문제",
++      "playTime": "시각 듣기",
++      "answerTime": "몇 시 몇 분이라고 들었나요? (예: 3:20)",
++      "wrongTime": "정답은 {t}이에요.",
++      "nextTime": "다음 시각"
+     }
+   },
+   "daily-quiz": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 14c4e3d..60bd522 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1038,6 +1038,10 @@
+       {
+         "q": "怎么练习 하나、둘、셋？",
+         "a": "在难度里选择“数数”。你会听到 세 개（3个）、두 명（2人）、네 시（4点）、스무 살（20岁）等。在量词前，하나·둘·셋·넷·스물 会变成 한·두·세·네·스무。"
++      },
++      {
++        "q": "韩语怎么说时间？",
++        "a": "“点”用 하나、둘、셋 这类数字（세 시 = 3点），“分”用 일、이、삼 这类数字（이십 분 = 20分）。30分常说 반（세 시 반 = 3点半）。在难度里选择“时间”就能练习。"
+       }
+     ],
+     "ui": {
+@@ -1046,7 +1050,8 @@
+         "easy": "简单（1万以下）",
+         "medium": "中等（10万以下）",
+         "hard": "困难（100万以下）",
+-        "native": "数数（하나、둘、셋…）"
++        "native": "数数（하나、둘、셋…）",
++        "time": "时间（세 시 이십 분）"
+       },
+       "play": "播放价格",
+       "replay": "再听一遍",
+@@ -1061,7 +1066,11 @@
+       "playCount": "播放数量",
+       "answerCount": "你听到的是几？",
+       "wrongCount": "答案是 {n}。",
+-      "nextCount": "下一题"
++      "nextCount": "下一题",
++      "playTime": "播放时间",
++      "answerTime": "你听到的是几点几分？（例：3:20）",
++      "wrongTime": "答案是 {t}。",
++      "nextTime": "下一个时间"
+     }
+   },
+   "daily-quiz": {
+diff --git a/lib/korean-time.ts b/lib/korean-time.ts
+new file mode 100644
+index 0000000..adc8a63
+--- /dev/null
++++ b/lib/korean-time.ts
+@@ -0,0 +1,31 @@
++// 시각 읽기: "세 시 이십 분"처럼 '시'는 고유어 수, '분'은 한자어 수로 읽어요.
++// 30분은 흔히 "반"이라고도 해요 (세 시 반). 0분은 "세 시"만 말해요.
++import { nativeKorean } from "@/lib/native-number";
++import { numberToKorean } from "@/lib/korean-number";
++
++export function timeToKorean(h: number, m: number, useBan = false): string {
++  if (!Number.isInteger(h) || h < 1 || h > 12) throw new RangeError("hour: 1-12");
++  if (!Number.isInteger(m) || m < 0 || m > 59) throw new RangeError("minute: 0-59");
++  const hour = `${nativeKorean(h, true)} 시`;
++  if (m === 0) return hour;
++  if (m === 30 && useBan) return `${hour} 반`;
++  return `${hour} ${numberToKorean(m)} 분`;
++}
++
++// 5분 단위 시각 (예약·약속에서 자주 듣는 꼴). 30분이면 절반은 "반"으로 읽어요.
++export function randomTime() {
++  const h = 1 + Math.floor(Math.random() * 12);
++  const m = Math.floor(Math.random() * 12) * 5;
++  return { h, m, text: timeToKorean(h, m, Math.random() < 0.5) };
++}
++
++// 입력 "3:20", "3 20", "320", "3시 20분", "3" → {h, m}. 못 알아보면 null.
++export function parseTime(input: string): { h: number; m: number } | null {
++  const parts = input.match(/\d+/g);
++  if (!parts) return null;
++  if (parts.length >= 2) return { h: Number(parts[0]), m: Number(parts[1]) };
++  const d = parts[0];
++  if (d.length <= 2) return { h: Number(d), m: 0 };
++  if (d.length <= 4) return { h: Number(d.slice(0, -2)), m: Number(d.slice(-2)) };
++  return null;
++}
