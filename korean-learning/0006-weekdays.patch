@@ -1,0 +1,251 @@
+From 9defdfe6b211f39a0f74530f061dfb103ea3d891 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 00:30:09 +0000
+Subject: [PATCH 6/8] =?UTF-8?q?=ED=95=9C=EA=B5=AD=EC=96=B4=20=EC=88=AB?=
+ =?UTF-8?q?=EC=9E=90:=20=EC=9A=94=EC=9D=BC(=EC=9B=94=EC=9A=94=EC=9D=BC~?=
+ =?UTF-8?q?=EC=9D=BC=EC=9A=94=EC=9D=BC)=20=EB=93=A3=EA=B3=A0=20=EA=B3=A0?=
+ =?UTF-8?q?=EB=A5=B4=EA=B8=B0=20=EB=8B=A8=EA=B3=84=20=EC=B6=94=EA=B0=80=20?=
+ =?UTF-8?q?(=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../tools/korean-numbers/NumbersPractice.tsx  | 64 ++++++++++++++++---
+ content/en/tools.json                         | 16 ++++-
+ content/ko/tools.json                         | 16 ++++-
+ content/zh/tools.json                         | 16 ++++-
+ 4 files changed, 98 insertions(+), 14 deletions(-)
+
+diff --git a/app/[lang]/tools/korean-numbers/NumbersPractice.tsx b/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
+index 951adbf..354685f 100644
+--- a/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
++++ b/app/[lang]/tools/korean-numbers/NumbersPractice.tsx
+@@ -9,11 +9,13 @@ import { speakKorean } from "@/lib/speech";
+ import { useStoredJSON } from "@/lib/storage";
+ import type { ToolUi } from "@/lib/content";
+ 
+-type Level = "easy" | "medium" | "hard" | "native" | "time" | "date";
++type Level = "easy" | "medium" | "hard" | "native" | "time" | "date" | "day";
+ // 문제 하나: parts = 정답 숫자들(입력칸 하나에 하나씩), units = 각 입력칸 옆 단위, text = 읽어 주는 한국어
+ // 가격·세기는 칸 1개, 시간(시·분)·날짜(월·일)는 칸 2개예요.
+ type Q = { parts: number[]; units: string[]; text: string };
+ const PRICE_LEVELS = ["easy", "medium", "hard"] as const;
++// 요일: 월요일부터 일요일까지. 들은 요일을 보기 7개 중에서 골라요.
++const DAYS_KO = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"];
+ type PriceLevel = (typeof PRICE_LEVELS)[number];
+ 
+ // 단계별로 실제 가격처럼 보이는 숫자를 만들어요. (step 단위로 끊어서)
+@@ -39,6 +41,10 @@ function randomQ(level: Level, won: string): Q {
+     const d = randomDate();
+     return { parts: [d.m, d.d], units: ["월", "일"], text: d.text };
+   }
++  if (level === "day") {
++    const i = Math.floor(Math.random() * DAYS_KO.length);
++    return { parts: [i], units: [], text: DAYS_KO[i] };
++  }
+   const { min, max, step } = RANGES[level];
+   const count = Math.floor((max - min) / step) + 1;
+   const n = min + Math.floor(Math.random() * count) * step;
+@@ -46,7 +52,8 @@ function randomQ(level: Level, won: string): Q {
+ }
+ 
+ // 틀렸을 때 보여 줄 정답: 가격은 1,000처럼, 나머지는 "3시 20분"처럼
+-function answerText(level: Level, q: Q) {
++function answerText(level: Level, q: Q, days: readonly string[]) {
++  if (level === "day") return days[q.parts[0]];
+   if ((PRICE_LEVELS as readonly string[]).includes(level)) return formatNumber(q.parts[0]);
+   if (q.parts.length === 1) return String(q.parts[0]);
+   return q.parts.map((p, i) => `${p}${q.units[i]}`).join(" ");
+@@ -75,6 +82,15 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+     setStreak(ok ? streak + 1 : 0);
+   }
+ 
++  // 요일 단계: 보기를 누르면 바로 채점해요
++  function choose(i: number) {
++    if (price === null || result !== null) return;
++    const ok = price.parts[0] === i;
++    setGuess([String(i)]);
++    setResult(ok ? "right" : "wrong");
++    setStreak(ok ? streak + 1 : 0);
++  }
++
+   function next() {
+     const n = randomQ(level, ui.won);
+     setPrice(n);
+@@ -84,9 +100,18 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+   }
+ 
+   const isPrice = (PRICE_LEVELS as readonly string[]).includes(level);
+-  const playLabel = level === "time" ? ui.playTime : level === "date" ? ui.playDate : level === "native" ? ui.playCount : ui.play;
++  const playLabel =
++    level === "time" ? ui.playTime : level === "date" ? ui.playDate : level === "day" ? ui.playDay : level === "native" ? ui.playCount : ui.play;
+   const answerLabel =
+-    level === "time" ? ui.answerTime : level === "date" ? ui.answerDate : level === "native" ? ui.answerCount : ui.answer;
++    level === "time"
++      ? ui.answerTime
++      : level === "date"
++        ? ui.answerDate
++        : level === "day"
++          ? ui.answerDay
++          : level === "native"
++            ? ui.answerCount
++            : ui.answer;
+ 
+   return (
+     <div className="space-y-4">
+@@ -113,6 +138,27 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+         <div className="space-y-3 rounded-2xl border border-line bg-card p-4">
+           <fieldset>
+             <legend className="mb-1 block font-semibold">{answerLabel}</legend>
++            {level === "day" && (
++              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
++                {ui.days.map((d, i) => {
++                  const picked = guess[0] === String(i);
++                  const isAnswer = result !== null && price.parts[0] === i;
++                  return (
++                    <button
++                      key={d}
++                      type="button"
++                      onClick={() => choose(i)}
++                      disabled={result !== null}
++                      className={`rounded-xl border-2 px-3 py-3 font-semibold ${
++                        isAnswer ? "border-ok bg-ok/10" : picked ? "border-warn-ink bg-warn-bg" : "border-line"
++                      }`}
++                    >
++                      {d}
++                    </button>
++                  );
++                })}
++              </div>
++            )}
+             <div className="flex gap-2">
+               {price.units.map((unit, i) => (
+                 <span key={i} className="flex min-w-0 flex-1 items-center rounded-xl border-2 border-line focus-within:border-brand">
+@@ -134,14 +180,16 @@ export function NumbersPractice({ ui }: { ui: ToolUi<"korean-numbers"> }) {
+           </fieldset>
+ 
+           {result === null ? (
+-            <button type="button" onClick={check} className="w-full rounded-xl bg-ink py-3 font-semibold text-card">
+-              {ui.check}
+-            </button>
++            level !== "day" && (
++              <button type="button" onClick={check} className="w-full rounded-xl bg-ink py-3 font-semibold text-card">
++                {ui.check}
++              </button>
++            )
+           ) : (
+             <div aria-live="polite" className="space-y-3">
+               <div className={`rounded-xl p-3 ${result === "right" ? "bg-ok/10" : "bg-warn-bg"}`}>
+                 <p className="font-bold">
+-                  {result === "right" ? ui.correct : (isPrice ? ui.wrong : ui.wrongCount).replace("{n}", answerText(level, price))}
++                  {result === "right" ? ui.correct : (isPrice ? ui.wrong : ui.wrongCount).replace("{n}", answerText(level, price, ui.days))}
+                 </p>
+                 <p className="mt-1 text-sm">
+                   {ui.reading}:{" "}
+diff --git a/content/en/tools.json b/content/en/tools.json
+index 0d59c8f..e19ddfc 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1055,7 +1055,8 @@
+         "hard": "Hard (under 1,000,000)",
+         "native": "Counting (하나, 둘, 셋…)",
+         "time": "Time (세 시 이십 분)",
+-        "date": "Dates (유월 십오일)"
++        "date": "Dates (유월 십오일)",
++        "day": "Days of the week (월요일)"
+       },
+       "play": "Play price",
+       "replay": "Play again",
+@@ -1074,7 +1075,18 @@
+       "playTime": "Play time",
+       "playDate": "Play date",
+       "answerTime": "What time did you hear?",
+-      "answerDate": "What date did you hear?"
++      "answerDate": "What date did you hear?",
++      "playDay": "Play day",
++      "answerDay": "Which day did you hear?",
++      "days": [
++        "Mon",
++        "Tue",
++        "Wed",
++        "Thu",
++        "Fri",
++        "Sat",
++        "Sun"
++      ]
+     }
+   },
+   "daily-quiz": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 595cb07..d29201d 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1055,7 +1055,8 @@
+         "hard": "어려움 (100만 미만)",
+         "native": "세기 (하나, 둘, 셋…)",
+         "time": "시간 (세 시 이십 분)",
+-        "date": "날짜 (유월 십오일)"
++        "date": "날짜 (유월 십오일)",
++        "day": "요일 (월요일, 화요일…)"
+       },
+       "play": "가격 듣기",
+       "replay": "다시 듣기",
+@@ -1074,7 +1075,18 @@
+       "playTime": "시간 듣기",
+       "playDate": "날짜 듣기",
+       "answerTime": "몇 시 몇 분이었나요?",
+-      "answerDate": "몇 월 며칠이었나요?"
++      "answerDate": "몇 월 며칠이었나요?",
++      "playDay": "요일 듣기",
++      "answerDay": "무슨 요일이었나요?",
++      "days": [
++        "월요일",
++        "화요일",
++        "수요일",
++        "목요일",
++        "금요일",
++        "토요일",
++        "일요일"
++      ]
+     }
+   },
+   "daily-quiz": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 52a0eca..a06eb7b 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1055,7 +1055,8 @@
+         "hard": "困难（100万以下）",
+         "native": "数数（하나、둘、셋…）",
+         "time": "时间（세 시 이십 분）",
+-        "date": "日期（유월 십오일）"
++        "date": "日期（유월 십오일）",
++        "day": "星期（월요일）"
+       },
+       "play": "播放价格",
+       "replay": "再听一遍",
+@@ -1074,7 +1075,18 @@
+       "playTime": "播放时间",
+       "playDate": "播放日期",
+       "answerTime": "你听到的是几点几分？",
+-      "answerDate": "你听到的是几月几号？"
++      "answerDate": "你听到的是几月几号？",
++      "playDay": "播放星期",
++      "answerDay": "你听到的是星期几？",
++      "days": [
++        "周一",
++        "周二",
++        "周三",
++        "周四",
++        "周五",
++        "周六",
++        "周日"
++      ]
+     }
+   },
+   "daily-quiz": {
+-- 
+2.43.0
+

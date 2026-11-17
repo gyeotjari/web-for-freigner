@@ -1,0 +1,256 @@
+From 7519f8e7b306049358f441ab71cc36baa9ebc0da Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 00:25:37 +0000
+Subject: [PATCH 5/8] =?UTF-8?q?=EC=A1=B4=EB=8C=93=EB=A7=90=C2=B7=EB=B0=98?=
+ =?UTF-8?q?=EB=A7=90:=20=EB=A9=94=EC=8B=A0=EC=A0=80=20=ED=95=9C=EA=B5=AD?=
+ =?UTF-8?q?=EC=96=B4(=E3=85=8B=E3=85=8B=C2=B7=E3=85=87=E3=85=87=C2=B7?=
+ =?UTF-8?q?=EB=84=B5=20=EB=93=B1=2010=EA=B0=9C)=20=EC=B9=B4=EB=93=9C=20?=
+ =?UTF-8?q?=EC=B6=94=EA=B0=80=20(=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ app/[lang]/tools/korean-politeness/page.tsx |  36 +++++++
+ content/en/tools.json                       |   7 +-
+ content/ko/tools.json                       |   7 +-
+ content/zh/tools.json                       |   7 +-
+ data/politeness.json                        | 108 +++++++++++++++++++-
+ 5 files changed, 161 insertions(+), 4 deletions(-)
+
+diff --git a/app/[lang]/tools/korean-politeness/page.tsx b/app/[lang]/tools/korean-politeness/page.tsx
+index 316eee9..74d6520 100644
+--- a/app/[lang]/tools/korean-politeness/page.tsx
++++ b/app/[lang]/tools/korean-politeness/page.tsx
+@@ -15,6 +15,14 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/tools/kore
+ type Level = { id: "casual" | "polite" | "formal"; icon: string; name: Localized; when: Localized };
+ type Words = { ko: string; roman: string };
+ type Example = { id: string; meaning: Localized; casual: Words; polite: Words; formal: Words };
++type TextItem = { ko: string; read: string; level: "any" | "polite" | "casual"; meaning: Localized };
++
++// 메신저 줄임말: 누구에게 보내도 되는지 표시 색
++const TEXT_BADGE: Record<TextItem["level"], string> = {
++  any: "bg-bg",
++  polite: "bg-brand-soft",
++  casual: "bg-bg text-muted",
++};
+ 
+ // 말투별 색 (해요체 = 가장 무난해서 강조)
+ const TONE: Record<Level["id"], string> = {
+@@ -29,6 +37,8 @@ export default async function Page({ params }: PageProps<"/[lang]/tools/korean-p
+   const ui = content.ui;
+   const levels = data.levels as Level[];
+   const examples = data.examples as Example[];
++  const texting = data.texting.items as TextItem[];
++  const levelLabel = { any: ui.levelAny, polite: ui.levelPolite, casual: ui.levelCasual };
+ 
+   return (
+     <ToolLayout lang={lang} slug={SLUG} about={content.about} faq={content.faq} sources={[]}>
+@@ -79,6 +89,32 @@ export default async function Page({ params }: PageProps<"/[lang]/tools/korean-p
+             ))}
+           </ul>
+         </section>
++
++        {/* 카톡·문자 줄임말 (ㅋㅋ, ㅇㅇ, 넵…) */}
++        <section className="space-y-2">
++          <h2 className="text-lg font-bold">{ui.texting}</h2>
++          <p className="text-sm text-muted">{ui.textingNote}</p>
++          <ul className="grid gap-2 sm:grid-cols-2">
++            {texting.map((t) => (
++              <li key={t.ko} className="rounded-2xl border border-line bg-card p-3">
++                <div className="flex items-center gap-2">
++                  <span lang="ko" className="text-lg font-bold">
++                    {t.ko}
++                  </span>
++                  {t.read && t.read !== t.ko && (
++                    <span lang="ko" className="text-sm text-muted">
++                      = {t.read}
++                    </span>
++                  )}
++                  <span className={`ml-auto shrink-0 rounded-full border border-line px-2 py-0.5 text-xs font-semibold ${TEXT_BADGE[t.level]}`}>
++                    {levelLabel[t.level]}
++                  </span>
++                </div>
++                <p className="mt-1 text-sm">{pick(t.meaning, lang)}</p>
++              </li>
++            ))}
++          </ul>
++        </section>
+       </div>
+     </ToolLayout>
+   );
+diff --git a/content/en/tools.json b/content/en/tools.json
+index cb0ac27..0d59c8f 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1230,7 +1230,12 @@
+     "ui": {
+       "levels": "Three ways of speaking",
+       "examples": "Same meaning, three ways",
+-      "listen": "Listen"
++      "listen": "Listen",
++      "texting": "Texting Korean (KakaoTalk)",
++      "textingNote": "Short forms you'll see in chats, grouped by who you can send them to.",
++      "levelAny": "OK with anyone",
++      "levelPolite": "Polite",
++      "levelCasual": "Friends only"
+     }
+   },
+   "health-insurance": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 4bdc20e..595cb07 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1230,7 +1230,12 @@
+     "ui": {
+       "levels": "말투 세 가지",
+       "examples": "같은 뜻, 세 가지 말투",
+-      "listen": "듣기"
++      "listen": "듣기",
++      "texting": "메신저 한국어 (카톡)",
++      "textingNote": "단톡방·문자에서 자주 보는 줄임말이에요. 누구에게나 / 존댓말 / 친구에게만으로 나눴어요.",
++      "levelAny": "누구에게나",
++      "levelPolite": "존댓말",
++      "levelCasual": "친구에게만"
+     }
+   },
+   "health-insurance": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index d33e49f..52a0eca 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1230,7 +1230,12 @@
+     "ui": {
+       "levels": "三种说话方式",
+       "examples": "同一个意思，三种说法",
+-      "listen": "听"
++      "listen": "听",
++      "texting": "聊天韩语（KakaoTalk）",
++      "textingNote": "聊天和短信里常见的缩写。分为：对谁都行 / 礼貌 / 只对朋友。",
++      "levelAny": "对谁都行",
++      "levelPolite": "礼貌",
++      "levelCasual": "只对朋友"
+     }
+   },
+   "health-insurance": {
+diff --git a/data/politeness.json b/data/politeness.json
+index 3716c87..eb6f88a 100644
+--- a/data/politeness.json
++++ b/data/politeness.json
+@@ -225,5 +225,111 @@
+         "roman": "ye"
+       }
+     }
+-  ]
++  ],
++  "texting": {
++    "_help": "카톡·문자에서 자주 보는 줄임말. level: any=누구에게나, polite=존댓말, casual=반말(친구만). 근거: 공식 사전 대조 전(CHECK_NEEDED).",
++    "lastChecked": "CHECK_NEEDED",
++    "items": [
++      {
++        "ko": "ㅋㅋ",
++        "read": "크크",
++        "level": "any",
++        "meaning": {
++          "en": "Laughing (like \"haha\"). More ㅋ = funnier.",
++          "ko": "웃음 (하하). ㅋ가 많을수록 더 웃겨요.",
++          "zh": "笑（哈哈）。ㅋ越多越好笑。"
++        }
++      },
++      {
++        "ko": "ㅎㅎ",
++        "read": "히히·하하",
++        "level": "any",
++        "meaning": {
++          "en": "Soft smile. Feels friendlier than ㅋㅋ, fine with people you don't know well.",
++          "ko": "부드러운 웃음. ㅋㅋ보다 순해서 잘 모르는 사람에게도 써요.",
++          "zh": "温和的笑。比ㅋㅋ柔和，对不太熟的人也可以用。"
++        }
++      },
++      {
++        "ko": "ㅠㅠ",
++        "read": "",
++        "level": "any",
++        "meaning": {
++          "en": "Crying face: sad, sorry, or \"so touched\".",
++          "ko": "우는 얼굴: 슬프거나 미안하거나 감동했을 때.",
++          "zh": "哭脸：难过、抱歉或感动时。"
++        }
++      },
++      {
++        "ko": "넵",
++        "read": "네",
++        "level": "polite",
++        "meaning": {
++          "en": "\"Yes\" / \"Got it\" — a friendly polite yes, very common in work chats.",
++          "ko": "\"네, 알겠습니다\" — 부드러운 존댓말 대답. 회사 단톡방에서 아주 많이 써요.",
++          "zh": "“是 / 知道了”——亲切的礼貌回答，工作群里非常常见。"
++        }
++      },
++      {
++        "ko": "ㅇㅇ",
++        "read": "응응",
++        "level": "casual",
++        "meaning": {
++          "en": "\"Yeah\" — casual only. Don't send it to your boss or landlord.",
++          "ko": "\"응\" — 반말이에요. 상사나 집주인에게는 보내지 마세요.",
++          "zh": "“嗯”——非敬语。不要发给上司或房东。"
++        }
++      },
++      {
++        "ko": "ㅇㅋ",
++        "read": "오케이",
++        "level": "casual",
++        "meaning": {
++          "en": "\"OK\" — casual only.",
++          "ko": "\"오케이\" — 반말이에요.",
++          "zh": "“OK”——非敬语。"
++        }
++      },
++      {
++        "ko": "ㄱㅅ",
++        "read": "감사",
++        "level": "casual",
++        "meaning": {
++          "en": "\"Thx\" — casual. To others write 감사합니다.",
++          "ko": "\"고마워\" 줄임말 — 반말이에요. 다른 사람에게는 감사합니다라고 쓰세요.",
++          "zh": "“谢”——非敬语。对别人请写감사합니다。"
++        }
++      },
++      {
++        "ko": "ㅈㅅ",
++        "read": "죄송",
++        "level": "casual",
++        "meaning": {
++          "en": "\"Sry\" — casual. A real apology needs 죄송합니다.",
++          "ko": "\"미안\" 줄임말 — 반말이에요. 제대로 사과할 때는 죄송합니다.",
++          "zh": "“抱歉”的缩写——非敬语。正式道歉要写죄송합니다。"
++        }
++      },
++      {
++        "ko": "ㄴㄴ",
++        "read": "노노",
++        "level": "casual",
++        "meaning": {
++          "en": "\"No no\" — casual only.",
++          "ko": "\"아니 아니\" — 반말이에요.",
++          "zh": "“不不”——非敬语。"
++        }
++      },
++      {
++        "ko": "수고하셨습니다",
++        "read": "수고하셨습니다",
++        "level": "polite",
++        "meaning": {
++          "en": "\"Thanks for your hard work\" — the usual way to end a work chat or say bye after work.",
++          "ko": "일을 마치거나 단톡방 대화를 끝낼 때 흔히 쓰는 인사예요.",
++          "zh": "“辛苦了”——下班或结束工作群聊时常用的问候。"
++        }
++      }
++    ]
++  }
+ }
+-- 
+2.43.0
+
