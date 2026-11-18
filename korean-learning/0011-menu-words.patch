@@ -1,0 +1,309 @@
+From 77dd037b001a5a56b7a884a1c273e3aec9c3319b Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 00:29:00 +0000
+Subject: [PATCH] =?UTF-8?q?=ED=95=9C=EA=B8=80=20=EC=9D=BD=EA=B8=B0:=20?=
+ =?UTF-8?q?=EB=A9=94=EB=89=B4=ED=8C=90=20=EC=9D=BD=EA=B8=B0=20=EC=B9=B4?=
+ =?UTF-8?q?=EB=93=9C=2012=EA=B0=9C=20(=EB=B3=B6=EC=9D=8C=C2=B7=EA=B5=AC?=
+ =?UTF-8?q?=EC=9D=B4=C2=B7=EC=B0=8C=EA=B0=9C=E2=80=A6,=20=EB=9C=BB=20?=
+ =?UTF-8?q?=ED=99=95=EC=9D=B8=20=ED=95=84=EC=9A=94)=20(=EC=8B=9C=EC=A0=9C?=
+ =?UTF-8?q?=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../tools/hangul-reader/HangulReader.tsx      |  36 +++++
+ app/[lang]/tools/hangul-reader/page.tsx       |   5 +-
+ content/en/tools.json                         |   4 +-
+ content/ko/tools.json                         |   4 +-
+ content/zh/tools.json                         |   4 +-
+ data/hangul.json                              | 136 ++++++++++++++++++
+ 6 files changed, 185 insertions(+), 4 deletions(-)
+
+diff --git a/app/[lang]/tools/hangul-reader/HangulReader.tsx b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+index 8f15848..ad8865c 100644
+--- a/app/[lang]/tools/hangul-reader/HangulReader.tsx
++++ b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+@@ -10,6 +10,7 @@ type Ui = ToolUi<"hangul-reader">;
+ type Letter = { char: string; name: string; roman: string; example: string };
+ type Group = { id: string; name: string; letters: Letter[] };
+ type Sign = { id: string; ko: string; roman: string; meaning: string };
++type MenuWord = { id: string; ko: string; roman: string; meaning: string; example: string };
+ type SoundRule = { id: string; name: string; explain: string; examples: { written: string; said: string }[] };
+ 
+ export function HangulReader({
+@@ -17,11 +18,13 @@ export function HangulReader({
+   groups,
+   signs,
+   soundRules,
++  menuWords,
+ }: {
+   ui: Ui;
+   groups: Group[];
+   signs: Sign[];
+   soundRules: SoundRule[];
++  menuWords: MenuWord[];
+ }) {
+   const isClient = useIsClient();
+   const [last, setLast] = useState<Letter | null>(null);
+@@ -71,6 +74,8 @@ export function HangulReader({
+ 
+       <SoundRules ui={ui} rules={soundRules} />
+ 
++      <MenuWords ui={ui} words={menuWords} />
++
+       <section className="rounded-2xl border border-line bg-card p-4">
+         <h2 className="mb-3 text-lg font-bold">🔤 {ui.quizTitle}</h2>
+         {/* 문제 순서는 무작위라서 브라우저에서만 만들어요 */}
+@@ -243,3 +248,34 @@ function SoundRules({ ui, rules }: { ui: Ui; rules: SoundRule[] }) {
+     </section>
+   );
+ }
++
++// 메뉴판 읽기: 음식 이름 끝의 요리 방법(볶음·구이·찌개…) 12개. 예시 음식을 누르면 들려요.
++// 휴대폰에서 길어지지 않게 접어 둬요.
++function MenuWords({ ui, words }: { ui: Ui; words: MenuWord[] }) {
++  return (
++    <details className="rounded-xl border border-line bg-card p-3">
++      <summary className="cursor-pointer font-bold">🍲 {ui.menuTitle}</summary>
++      <p className="mt-2 text-sm text-muted">{ui.menuHint}</p>
++      <ul className="mt-2 grid grid-cols-2 gap-2">
++        {words.map((w) => (
++          <li key={w.id} className="rounded-lg border border-line p-2">
++            <p>
++              <span lang="ko" className="text-lg font-bold">
++                {w.ko}
++              </span>{" "}
++              <span className="text-xs text-muted">{w.roman}</span>
++            </p>
++            <p className="text-sm">{w.meaning}</p>
++            <button
++              type="button"
++              onClick={() => speakKorean(w.example)}
++              className="mt-1 rounded-lg border border-line px-2 py-0.5 text-sm"
++            >
++              🔊 <span lang="ko">{w.example}</span>
++            </button>
++          </li>
++        ))}
++      </ul>
++    </details>
++  );
++}
+diff --git a/app/[lang]/tools/hangul-reader/page.tsx b/app/[lang]/tools/hangul-reader/page.tsx
+index 6a114d7..efc9a49 100644
+--- a/app/[lang]/tools/hangul-reader/page.tsx
++++ b/app/[lang]/tools/hangul-reader/page.tsx
+@@ -27,6 +27,9 @@ export default async function Page({ params }: PageProps<"/[lang]/tools/hangul-r
+     examples: r.examples,
+   }));
+ 
++  // 메뉴판 단어: 음식 이름 끝 요리 방법 (뜻 대조 필요 → menuWordsLastChecked)
++  const menuWords = hangul.menuWords.map((w) => ({ id: w.id, ko: w.ko, roman: w.roman, meaning: pick(w.meaning, lang), example: w.example }));
++
+   return (
+     <ToolLayout
+       lang={lang}
+@@ -42,7 +45,7 @@ export default async function Page({ params }: PageProps<"/[lang]/tools/hangul-r
+         { label: "National Institute of Korean Language — Standard Pronunciation Rules", url: hangul.soundRulesSource.url, lastChecked: hangul.soundRulesSource.lastChecked },
+       ]}
+     >
+-      <HangulReader ui={content.ui} groups={groups} signs={signs} soundRules={soundRules} />
++      <HangulReader ui={content.ui} groups={groups} signs={signs} soundRules={soundRules} menuWords={menuWords} />
+     </ToolLayout>
+   );
+ }
+diff --git a/content/en/tools.json b/content/en/tools.json
+index d0e147e..c8f3ae6 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1022,7 +1022,9 @@
+       "soundAs": "sounds like",
+       "reviewButton": "Review my mistakes ({n})",
+       "reviewing": "Reviewing mistakes",
+-      "reviewStop": "Back to all"
++      "reviewStop": "Back to all",
++      "menuTitle": "Read the menu",
++      "menuHint": "Korean dish names end with how the food is cooked. Learn these and you can guess most menus. Tap a dish to hear it."
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 17777f6..83564fa 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1022,7 +1022,9 @@
+       "soundAs": "소리",
+       "reviewButton": "틀린 것만 다시 ({n}개)",
+       "reviewing": "틀린 것 복습 중",
+-      "reviewStop": "전체로"
++      "reviewStop": "전체로",
++      "menuTitle": "메뉴판 읽기",
++      "menuHint": "한국 음식 이름 끝에는 요리 방법이 붙어요. 이것만 알면 메뉴 대부분을 짐작할 수 있어요. 음식 이름을 누르면 들려요."
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 8e4e7df..df51615 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1022,7 +1022,9 @@
+       "soundAs": "读作",
+       "reviewButton": "只练错题（{n}个）",
+       "reviewing": "正在复习错题",
+-      "reviewStop": "返回全部"
++      "reviewStop": "返回全部",
++      "menuTitle": "看懂菜单",
++      "menuHint": "韩国菜名的结尾通常是做法。记住这些，大部分菜单都能猜出来。点菜名可以听发音。"
+     }
+   },
+   "korean-numbers": {
+diff --git a/data/hangul.json b/data/hangul.json
+index 766768c..6ceba5f 100644
+--- a/data/hangul.json
++++ b/data/hangul.json
+@@ -810,5 +810,141 @@
+         }
+       ]
+     }
++  ],
++  "menuWordsLastChecked": "CHECK_NEEDED",
++  "menuWordsNote": "뜻: 표준국어대사전으로 대조 필요 (이 실행 환경에서 stdict.korean.go.kr 접속이 막혔어요). 로마자: 국어의 로마자 표기법.",
++  "menuWords": [
++    {
++      "id": "bap",
++      "ko": "밥",
++      "roman": "bap",
++      "meaning": {
++        "en": "Rice / meal",
++        "ko": "밥, 식사",
++        "zh": "米饭 / 饭"
++      },
++      "example": "비빔밥"
++    },
++    {
++      "id": "guk",
++      "ko": "국",
++      "roman": "guk",
++      "meaning": {
++        "en": "Soup",
++        "ko": "국",
++        "zh": "汤"
++      },
++      "example": "미역국"
++    },
++    {
++      "id": "tang",
++      "ko": "탕",
++      "roman": "tang",
++      "meaning": {
++        "en": "Hearty soup (long-boiled)",
++        "ko": "오래 끓인 국",
++        "zh": "汤（久炖）"
++      },
++      "example": "갈비탕"
++    },
++    {
++      "id": "jjigae",
++      "ko": "찌개",
++      "roman": "jjigae",
++      "meaning": {
++        "en": "Stew (thick, salty)",
++        "ko": "찌개 (진하고 짭짤)",
++        "zh": "炖汤（浓、偏咸）"
++      },
++      "example": "김치찌개"
++    },
++    {
++      "id": "bokkeum",
++      "ko": "볶음",
++      "roman": "bokkeum",
++      "meaning": {
++        "en": "Stir-fried",
++        "ko": "볶은 것",
++        "zh": "炒"
++      },
++      "example": "김치볶음밥"
++    },
++    {
++      "id": "gui",
++      "ko": "구이",
++      "roman": "gui",
++      "meaning": {
++        "en": "Grilled",
++        "ko": "구운 것",
++        "zh": "烤"
++      },
++      "example": "생선구이"
++    },
++    {
++      "id": "jjim",
++      "ko": "찜",
++      "roman": "jjim",
++      "meaning": {
++        "en": "Steamed / braised",
++        "ko": "찐 것·졸인 것",
++        "zh": "蒸 / 炖"
++      },
++      "example": "갈비찜"
++    },
++    {
++      "id": "jorim",
++      "ko": "조림",
++      "roman": "jorim",
++      "meaning": {
++        "en": "Simmered in soy sauce",
++        "ko": "간장에 졸인 것",
++        "zh": "酱炖（酱油收汁）"
++      },
++      "example": "두부조림"
++    },
++    {
++      "id": "jeon",
++      "ko": "전",
++      "roman": "jeon",
++      "meaning": {
++        "en": "Pan-fried (Korean pancake)",
++        "ko": "부친 것 (부침개)",
++        "zh": "煎饼"
++      },
++      "example": "김치전"
++    },
++    {
++      "id": "twigim",
++      "ko": "튀김",
++      "roman": "twigim",
++      "meaning": {
++        "en": "Deep-fried",
++        "ko": "튀긴 것",
++        "zh": "油炸"
++      },
++      "example": "새우튀김"
++    },
++    {
++      "id": "deopbap",
++      "ko": "덮밥",
++      "roman": "deopbap",
++      "meaning": {
++        "en": "Topping on rice (rice bowl)",
++        "ko": "밥 위에 얹은 것",
++        "zh": "盖饭"
++      },
++      "example": "제육덮밥"
++    },
++    {
++      "id": "guksu",
++      "ko": "국수",
++      "roman": "guksu",
++      "meaning": {
++        "en": "Noodles",
++        "ko": "국수, 면",
++        "zh": "面条"
++      },
++      "example": "잔치국수"
++    }
+   ]
+ }
+-- 
+2.43.0
+

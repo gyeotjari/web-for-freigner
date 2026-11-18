@@ -1,0 +1,191 @@
+From e574459815445043a99be2bbf7a9f2e379aac537 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 00:27:46 +0000
+Subject: [PATCH] =?UTF-8?q?=ED=95=9C=EA=B8=80=20=EC=9D=BD=EA=B8=B0:=20?=
+ =?UTF-8?q?=EA=B0=84=ED=8C=90=20=ED=80=B4=EC=A6=88=20'=ED=8B=80=EB=A6=B0?=
+ =?UTF-8?q?=20=EA=B2=83=EB=A7=8C=20=EB=8B=A4=EC=8B=9C'=20=EB=B3=B5?=
+ =?UTF-8?q?=EC=8A=B5=20(=EC=9D=B4=20=EA=B8=B0=EA=B8=B0=EC=97=90=EB=A7=8C?=
+ =?UTF-8?q?=20=EC=A0=80=EC=9E=A5)=20(=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../tools/hangul-reader/HangulReader.tsx      | 47 ++++++++++++++++++-
+ content/en/tools.json                         |  8 +++-
+ content/ko/tools.json                         |  8 +++-
+ content/zh/tools.json                         |  8 +++-
+ 4 files changed, 63 insertions(+), 8 deletions(-)
+
+diff --git a/app/[lang]/tools/hangul-reader/HangulReader.tsx b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+index 49369fa..8f15848 100644
+--- a/app/[lang]/tools/hangul-reader/HangulReader.tsx
++++ b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+@@ -81,12 +81,17 @@ export function HangulReader({
+ }
+ 
+ function SignQuiz({ ui, signs }: { ui: Ui; signs: Sign[] }) {
+-  const [order] = useState(() => shuffle(signs));
++  const [order, setOrder] = useState(() => shuffle(signs));
+   const [index, setIndex] = useState(0);
+   const [picked, setPicked] = useState<string | null>(null);
+   const [streak, setStreak] = useState(0);
+   const [score, setScore] = useState(0);
++  const [answered, setAnswered] = useState(0);
+   const [best, setBest] = useStoredJSON("kt:hangul:best", 0);
++  // 틀린 간판 id를 이 기기에만 저장해요. 맞히면 목록에서 빠져요. (단어 앱의 "틀린 것 복습")
++  const [missed, setMissed] = useStoredJSON<string[]>("kt:hangul:missed", []);
++  const [review, setReview] = useState(false);
++  const missedSigns = signs.filter((s) => missed.includes(s.id));
+ 
+   const sign = order[index % order.length];
+   const [choices, setChoices] = useState(() => makeChoices(sign.meaning, signs.map((s) => s.meaning)));
+@@ -94,28 +99,66 @@ function SignQuiz({ ui, signs }: { ui: Ui; signs: Sign[] }) {
+   function answer(choice: string) {
+     if (picked) return;
+     setPicked(choice);
++    setAnswered(answered + 1);
+     if (choice === sign.meaning) {
+       const s = streak + 1;
+       setStreak(s);
+       setScore(score + 1);
+       if (s > best) setBest(s);
++      if (missed.includes(sign.id)) setMissed(missed.filter((id) => id !== sign.id));
+     } else {
+       setStreak(0);
++      if (!missed.includes(sign.id)) setMissed([...missed, sign.id]);
+     }
+   }
+ 
++  function start(list: Sign[], isReview: boolean) {
++    const o = shuffle(list);
++    setOrder(o);
++    setReview(isReview);
++    setIndex(0);
++    setPicked(null);
++    setChoices(makeChoices(o[0].meaning, signs.map((s) => s.meaning)));
++  }
++
+   function next() {
++    // 복습 중: 한 바퀴 돌면 아직 남은 틀린 것만 다시, 다 맞혔으면 전체 문제로 돌아가요.
++    if (review && index + 1 >= order.length) {
++      if (missedSigns.length > 0) start(missedSigns, true);
++      else start(signs, false);
++      return;
++    }
+     const nextSign = order[(index + 1) % order.length];
+     setIndex(index + 1);
+     setPicked(null);
+     setChoices(makeChoices(nextSign.meaning, signs.map((s) => s.meaning)));
+   }
+ 
++  const reviewBar = review ? (
++    <div className="flex items-center justify-between gap-2 rounded-xl bg-warn-bg px-3 py-2 text-sm">
++      <span>
++        🔁 {ui.reviewing} ({Math.min(index + 1, order.length)} / {order.length})
++      </span>
++      <button type="button" onClick={() => start(signs, false)} className="rounded-lg border border-line bg-card px-2 py-1">
++        {ui.reviewStop}
++      </button>
++    </div>
++  ) : missedSigns.length > 0 && !picked ? (
++    <button
++      type="button"
++      onClick={() => start(missedSigns, true)}
++      className="w-full rounded-xl border-2 border-accent px-3 py-2 text-sm font-semibold"
++    >
++      🔁 {ui.reviewButton.replace("{n}", String(missedSigns.length))}
++    </button>
++  ) : null;
++
+   return (
+     <div className="space-y-3">
+       <p className="text-sm text-muted">
+-        {ui.score}: {score} / {index + (picked ? 1 : 0)} · {ui.best}: {best}
++        {ui.score}: {score} / {answered} · {ui.best}: {best}
+       </p>
++      {reviewBar}
+       <p className="text-sm font-semibold">{ui.question}</p>
+       <div className="flex items-center justify-center gap-3 rounded-2xl bg-ink py-6 text-card">
+         <span lang="ko" className="text-4xl font-bold tracking-wide">
+diff --git a/content/en/tools.json b/content/en/tools.json
+index 7367a77..d0e147e 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -986,7 +986,8 @@
+       "Hangul has 14 basic consonants and 10 basic vowels. Most people can learn to read it in a few days.",
+       "Tap a letter to hear it with a vowel. Then try reading real sign words below.",
+       "Your best quiz score is saved on this device.",
+-      "Tap 🔊 again within 5 seconds to hear it slowly."
++      "Tap 🔊 again within 5 seconds to hear it slowly.",
++      "Signs you get wrong are saved on this device. Tap “Review my mistakes” to practice only those."
+     ],
+     "faq": [
+       {
+@@ -1018,7 +1019,10 @@
+       "listen": "Listen",
+       "soundTitle": "Why does it sound different?",
+       "soundHint": "Korean letters change sound next to each other. Tap a word to hear it.",
+-      "soundAs": "sounds like"
++      "soundAs": "sounds like",
++      "reviewButton": "Review my mistakes ({n})",
++      "reviewing": "Reviewing mistakes",
++      "reviewStop": "Back to all"
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index e32e01f..17777f6 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -986,7 +986,8 @@
+       "한글은 기본 자음 14개, 기본 모음 10개예요. 며칠이면 읽을 수 있어요.",
+       "글자를 누르면 모음과 합친 소리를 들을 수 있어요. 아래에서 실제 간판 단어도 읽어보세요.",
+       "퀴즈 최고 기록은 이 기기에 저장돼요.",
+-      "🔊를 5초 안에 한 번 더 누르면 천천히 읽어 줘요."
++      "🔊를 5초 안에 한 번 더 누르면 천천히 읽어 줘요.",
++      "틀린 간판은 이 기기에 저장돼요. '틀린 것만 다시'를 누르면 그것만 연습해요."
+     ],
+     "faq": [
+       {
+@@ -1018,7 +1019,10 @@
+       "listen": "듣기",
+       "soundTitle": "왜 글자와 소리가 달라요?",
+       "soundHint": "한국어 글자는 옆 글자에 따라 소리가 바뀌어요. 단어를 누르면 들려요.",
+-      "soundAs": "소리"
++      "soundAs": "소리",
++      "reviewButton": "틀린 것만 다시 ({n}개)",
++      "reviewing": "틀린 것 복습 중",
++      "reviewStop": "전체로"
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 1995b6f..8e4e7df 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -986,7 +986,8 @@
+       "韩文有14个基本辅音和10个基本元音，大多数人几天就能学会认读。",
+       "点击字母，听它和元音组合后的发音。然后试着读下面的真实招牌。",
+       "测验最高纪录会保存在这台设备上。",
+-      "5秒内再按一次 🔊，会放慢速度朗读。"
++      "5秒内再按一次 🔊，会放慢速度朗读。",
++      "答错的招牌会保存在本设备上。点“只练错题”即可只练这些。"
+     ],
+     "faq": [
+       {
+@@ -1018,7 +1019,10 @@
+       "listen": "朗读",
+       "soundTitle": "为什么读音和写法不一样？",
+       "soundHint": "韩语字母和旁边的字母相遇时读音会变。点单词可以听。",
+-      "soundAs": "读作"
++      "soundAs": "读作",
++      "reviewButton": "只练错题（{n}个）",
++      "reviewing": "正在复习错题",
++      "reviewStop": "返回全部"
+     }
+   },
+   "korean-numbers": {
+-- 
+2.43.0
+

@@ -1,0 +1,156 @@
+From a85d5218cec506be1781044e338effe10edcc1bb Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 00:24:09 +0000
+Subject: [PATCH] =?UTF-8?q?=EB=AA=A8=EB=93=A0=20=F0=9F=94=8A=20=EB=B2=84?=
+ =?UTF-8?q?=ED=8A=BC:=205=EC=B4=88=20=EC=95=88=EC=97=90=20=ED=95=9C=20?=
+ =?UTF-8?q?=EB=B2=88=20=EB=8D=94=20=EB=88=84=EB=A5=B4=EB=A9=B4=20=EB=8A=90?=
+ =?UTF-8?q?=EB=A6=AC=EA=B2=8C=20=EC=9D=BD=EA=B8=B0=20(=EC=8B=9C=EC=A0=9C?=
+ =?UTF-8?q?=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ content/en/tools.json |  9 ++++++---
+ content/ko/tools.json |  9 ++++++---
+ content/zh/tools.json |  9 ++++++---
+ lib/speech.ts         | 18 +++++++++++++++---
+ 4 files changed, 33 insertions(+), 12 deletions(-)
+
+diff --git a/content/en/tools.json b/content/en/tools.json
+index c8dde44..7367a77 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -958,7 +958,8 @@
+     "about": [
+       "Pick a situation to see phrases you can use right away.",
+       "Each card shows the Korean, the meaning and how to read it. Tap 🔊 to listen or “Show to staff” to show it in big letters.",
+-      "These are the same cards used in other tools, like Pharmacy Cards and Landlord Messages."
++      "These are the same cards used in other tools, like Pharmacy Cards and Landlord Messages.",
++      "Tap 🔊 again within 5 seconds to hear it slowly."
+     ],
+     "faq": [
+       {
+@@ -984,7 +985,8 @@
+     "about": [
+       "Hangul has 14 basic consonants and 10 basic vowels. Most people can learn to read it in a few days.",
+       "Tap a letter to hear it with a vowel. Then try reading real sign words below.",
+-      "Your best quiz score is saved on this device."
++      "Your best quiz score is saved on this device.",
++      "Tap 🔊 again within 5 seconds to hear it slowly."
+     ],
+     "faq": [
+       {
+@@ -1224,7 +1226,8 @@
+     "about": [
+       "Korean changes its endings depending on who you talk to.",
+       "When in doubt, use the polite form (해요체, ending in -요). It is safe with almost everyone.",
+-      "Tap 🔊 to hear each sentence."
++      "Tap 🔊 to hear each sentence.",
++      "Tap 🔊 again within 5 seconds to hear it slowly."
+     ],
+     "faq": [
+       {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 80feebd..e32e01f 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -958,7 +958,8 @@
+     "about": [
+       "상황을 고르면 바로 쓸 수 있는 문장이 나와요.",
+       "카드마다 한국어·뜻·읽는 법이 있어요. 🔊로 듣거나 '직원에게 보여주기'로 크게 보여주세요.",
+-      "약국 문장 카드, 집주인에게 보낼 문장 등 다른 도구와 같은 카드를 함께 써요."
++      "약국 문장 카드, 집주인에게 보낼 문장 등 다른 도구와 같은 카드를 함께 써요.",
++      "🔊를 5초 안에 한 번 더 누르면 천천히 읽어 줘요."
+     ],
+     "faq": [
+       {
+@@ -984,7 +985,8 @@
+     "about": [
+       "한글은 기본 자음 14개, 기본 모음 10개예요. 며칠이면 읽을 수 있어요.",
+       "글자를 누르면 모음과 합친 소리를 들을 수 있어요. 아래에서 실제 간판 단어도 읽어보세요.",
+-      "퀴즈 최고 기록은 이 기기에 저장돼요."
++      "퀴즈 최고 기록은 이 기기에 저장돼요.",
++      "🔊를 5초 안에 한 번 더 누르면 천천히 읽어 줘요."
+     ],
+     "faq": [
+       {
+@@ -1224,7 +1226,8 @@
+     "about": [
+       "한국어는 말하는 상대에 따라 끝말(어미)이 달라져요.",
+       "잘 모르겠으면 해요체(-요로 끝나는 말)를 쓰세요. 거의 누구에게나 무난해요.",
+-      "🔊를 누르면 소리를 들을 수 있어요."
++      "🔊를 누르면 소리를 들을 수 있어요.",
++      "🔊를 5초 안에 한 번 더 누르면 천천히 읽어 줘요."
+     ],
+     "faq": [
+       {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 4f1e7eb..1995b6f 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -958,7 +958,8 @@
+     "about": [
+       "选择一个场景，查看马上能用的句子。",
+       "每张卡片都有韩语、意思和读音。点🔊收听，或点“给工作人员看”放大显示。",
+-      "这些卡片和药店用语卡、给房东的消息等工具共用。"
++      "这些卡片和药店用语卡、给房东的消息等工具共用。",
++      "5秒内再按一次 🔊，会放慢速度朗读。"
+     ],
+     "faq": [
+       {
+@@ -984,7 +985,8 @@
+     "about": [
+       "韩文有14个基本辅音和10个基本元音，大多数人几天就能学会认读。",
+       "点击字母，听它和元音组合后的发音。然后试着读下面的真实招牌。",
+-      "测验最高纪录会保存在这台设备上。"
++      "测验最高纪录会保存在这台设备上。",
++      "5秒内再按一次 🔊，会放慢速度朗读。"
+     ],
+     "faq": [
+       {
+@@ -1224,7 +1226,8 @@
+     "about": [
+       "韩语会根据说话对象改变句尾。",
+       "不确定时就用礼貌体（해요체，以“-요”结尾），对几乎所有人都合适。",
+-      "点击🔊可以听发音。"
++      "点击🔊可以听发音。",
++      "5秒内再按一次 🔊，会放慢速度朗读。"
+     ],
+     "faq": [
+       {
+diff --git a/lib/speech.ts b/lib/speech.ts
+index 183bcc4..45eb073 100644
+--- a/lib/speech.ts
++++ b/lib/speech.ts
+@@ -3,12 +3,24 @@ export function canSpeak() {
+   return typeof window !== "undefined" && "speechSynthesis" in window;
+ }
+ 
+-// rate: 보통 0.9, 느리게 듣기(🐢)는 0.6
+-export function speakKorean(text: string, rate = 0.9) {
++// 같은 말을 5초 안에 다시 누르면 느리게(0.6) 읽어줘요. (번역 앱처럼 "한 번 더 = 천천히")
++// 그다음에 또 누르면 다시 보통 속도. 사이트의 모든 🔊 버튼에 똑같이 적용돼요.
++const REPEAT_MS = 5000;
++let last: { text: string; at: number; slow: boolean } | null = null;
++
++// rate: 보통 0.9, 느리게 듣기(🐢)는 0.6. rate를 직접 주면 그 속도로만 읽어요.
++export function speakKorean(text: string, rate?: number) {
+   if (!canSpeak()) return;
++  const now = Date.now();
++  let r = rate ?? 0.9;
++  if (rate === undefined) {
++    const repeat = last !== null && last.text === text && now - last.at < REPEAT_MS && !last.slow;
++    if (repeat) r = 0.6;
++    last = { text, at: now, slow: repeat };
++  }
+   const u = new SpeechSynthesisUtterance(text);
+   u.lang = "ko-KR";
+-  u.rate = rate;
++  u.rate = r;
+   const koVoice = window.speechSynthesis.getVoices().find((v) => v.lang.startsWith("ko"));
+   if (koVoice) u.voice = koVoice;
+   window.speechSynthesis.cancel();
+-- 
+2.43.0
+
