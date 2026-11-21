@@ -1,0 +1,179 @@
+From bce081a96da355f877b318092b9e22f3f9c72156 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Sat, 21 Nov 2026 00:23:59 +0000
+Subject: [PATCH] =?UTF-8?q?=ED=95=9C=EA=B8=80=20=EC=9D=BD=EA=B8=B0:=20?=
+ =?UTF-8?q?=EB=A9=94=EB=89=B4=ED=8C=90=20=EB=93=A3=EA=B8=B0=20=ED=80=B4?=
+ =?UTF-8?q?=EC=A6=88=20(=EC=9D=8C=EC=8B=9D=20=EC=9D=B4=EB=A6=84=20?=
+ =?UTF-8?q?=EB=93=A3=EA=B3=A0=20=EC=A1=B0=EA=B0=81=20=EA=B3=A0=EB=A5=B4?=
+ =?UTF-8?q?=EA=B8=B0)=20(=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../tools/hangul-reader/HangulReader.tsx      | 87 ++++++++++++++++++-
+ content/en/tools.json                         |  4 +-
+ content/ko/tools.json                         |  4 +-
+ content/zh/tools.json                         |  4 +-
+ 4 files changed, 94 insertions(+), 5 deletions(-)
+
+diff --git a/app/[lang]/tools/hangul-reader/HangulReader.tsx b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+index ad8865c..bc98634 100644
+--- a/app/[lang]/tools/hangul-reader/HangulReader.tsx
++++ b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+@@ -74,7 +74,7 @@ export function HangulReader({
+ 
+       <SoundRules ui={ui} rules={soundRules} />
+ 
+-      <MenuWords ui={ui} words={menuWords} />
++      <MenuWords ui={ui} words={menuWords} isClient={isClient} />
+ 
+       <section className="rounded-2xl border border-line bg-card p-4">
+         <h2 className="mb-3 text-lg font-bold">🔤 {ui.quizTitle}</h2>
+@@ -251,7 +251,7 @@ function SoundRules({ ui, rules }: { ui: Ui; rules: SoundRule[] }) {
+ 
+ // 메뉴판 읽기: 음식 이름 끝의 요리 방법(볶음·구이·찌개…) 12개. 예시 음식을 누르면 들려요.
+ // 휴대폰에서 길어지지 않게 접어 둬요.
+-function MenuWords({ ui, words }: { ui: Ui; words: MenuWord[] }) {
++function MenuWords({ ui, words, isClient }: { ui: Ui; words: MenuWord[]; isClient: boolean }) {
+   return (
+     <details className="rounded-xl border border-line bg-card p-3">
+       <summary className="cursor-pointer font-bold">🍲 {ui.menuTitle}</summary>
+@@ -276,6 +276,89 @@ function MenuWords({ ui, words }: { ui: Ui; words: MenuWord[] }) {
+           </li>
+         ))}
+       </ul>
++      {/* 문제 순서는 무작위라서 브라우저에서만 만들어요 */}
++      {isClient && words.length >= 4 && <MenuListenQuiz ui={ui} words={words} />}
+     </details>
+   );
+ }
++
++// 메뉴판 듣기 퀴즈: 음식 이름(김치찌개)을 듣고 어떤 조각(찌개)이 들어 있는지 고르기. (그림 카드 단어 앱 방식)
++// 김치볶음밥처럼 조각이 두 개 들어간 음식이 있어서, 들은 음식 이름에 들어 있는 다른 조각은 보기에서 빼요.
++function pickMenuQ(words: MenuWord[]) {
++  const w = words[Math.floor(Math.random() * words.length)];
++  const pool = words.filter((o) => o.id === w.id || !w.example.includes(o.ko)).map((o) => o.ko);
++  return { w, choices: makeChoices(w.ko, pool) };
++}
++
++function MenuListenQuiz({ ui, words }: { ui: Ui; words: MenuWord[] }) {
++  const [q, setQ] = useState(() => pickMenuQ(words));
++  const [picked, setPicked] = useState<string | null>(null);
++  const [score, setScore] = useState(0);
++  const [answered, setAnswered] = useState(0);
++
++  function answer(c: string) {
++    if (picked) return;
++    setPicked(c);
++    setAnswered(answered + 1);
++    if (c === q.w.ko) setScore(score + 1);
++  }
++
++  function next() {
++    const n = pickMenuQ(words);
++    setQ(n);
++    setPicked(null);
++    speakKorean(n.w.example);
++  }
++
++  return (
++    <div className="mt-3 space-y-2 border-t border-line pt-3">
++      <p className="font-semibold">
++        🎧 {ui.menuQuizTitle}{" "}
++        <span className="text-sm font-normal text-muted">
++          ({ui.score}: {score} / {answered})
++        </span>
++      </p>
++      <p className="text-sm">{ui.menuQuizQuestion}</p>
++      <button
++        type="button"
++        onClick={() => speakKorean(q.w.example)}
++        aria-label={ui.listen}
++        className="w-full rounded-xl bg-ink py-4 text-2xl text-card"
++      >
++        🔊{" "}
++        {picked && (
++          <span lang="ko" className="font-bold">
++            {q.w.example}
++          </span>
++        )}
++      </button>
++      <div className="grid grid-cols-4 gap-2">
++        {q.choices.map((c) => {
++          const state = !picked ? "" : c === q.w.ko ? "border-ok bg-ok/10" : c === picked ? "border-accent bg-warn-bg" : "opacity-60";
++          return (
++            <button
++              key={c}
++              type="button"
++              lang="ko"
++              onClick={() => answer(c)}
++              className={`rounded-xl border-2 border-line bg-card py-3 text-lg font-bold ${state}`}
++            >
++              {c}
++            </button>
++          );
++        })}
++      </div>
++      {picked && (
++        <div aria-live="polite" className="space-y-2">
++          <p className="text-sm font-semibold">
++            {picked === q.w.ko ? ui.correct : ui.wrong.replace("{answer}", q.w.ko)}{" "}
++            <span className="font-normal text-muted">({q.w.meaning})</span>
++          </p>
++          <button type="button" onClick={next} className="w-full rounded-xl bg-brand px-4 py-2 font-semibold text-brand-ink">
++            {ui.next} →
++          </button>
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/content/en/tools.json b/content/en/tools.json
+index c1ca8e0..c358cc2 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1024,7 +1024,9 @@
+       "reviewing": "Reviewing mistakes",
+       "reviewStop": "Back to all",
+       "menuTitle": "Read the menu",
+-      "menuHint": "Korean dish names end with how the food is cooked. Learn these and you can guess most menus. Tap a dish to hear it."
++      "menuHint": "Korean dish names end with how the food is cooked. Learn these and you can guess most menus. Tap a dish to hear it.",
++      "menuQuizTitle": "Listening quiz",
++      "menuQuizQuestion": "Tap 🔊 to hear a dish. Which word is in its name?"
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 82c1872..9d15513 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1024,7 +1024,9 @@
+       "reviewing": "틀린 것 복습 중",
+       "reviewStop": "전체로",
+       "menuTitle": "메뉴판 읽기",
+-      "menuHint": "한국 음식 이름 끝에는 요리 방법이 붙어요. 이것만 알면 메뉴 대부분을 짐작할 수 있어요. 음식 이름을 누르면 들려요."
++      "menuHint": "한국 음식 이름 끝에는 요리 방법이 붙어요. 이것만 알면 메뉴 대부분을 짐작할 수 있어요. 음식 이름을 누르면 들려요.",
++      "menuQuizTitle": "듣기 퀴즈",
++      "menuQuizQuestion": "🔊를 눌러 음식 이름을 들어 보세요. 어떤 말이 들어 있나요?"
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 3488036..4cb2680 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1024,7 +1024,9 @@
+       "reviewing": "正在复习错题",
+       "reviewStop": "返回全部",
+       "menuTitle": "看懂菜单",
+-      "menuHint": "韩国菜名的结尾通常是做法。记住这些，大部分菜单都能猜出来。点菜名可以听发音。"
++      "menuHint": "韩国菜名的结尾通常是做法。记住这些，大部分菜单都能猜出来。点菜名可以听发音。",
++      "menuQuizTitle": "听力小测",
++      "menuQuizQuestion": "点 🔊 听菜名。菜名里有哪个词？"
+     }
+   },
+   "korean-numbers": {
+-- 
+2.43.0
+

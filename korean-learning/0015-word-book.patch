@@ -1,0 +1,226 @@
+From 473b37d57438c7407ce3729f78eb91cbeb700975 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Sat, 21 Nov 2026 00:26:20 +0000
+Subject: [PATCH] =?UTF-8?q?=ED=95=9C=EA=B8=80=20=EC=9D=BD=EA=B8=B0:=20?=
+ =?UTF-8?q?=E2=98=86=20=EB=82=B4=20=EB=8B=A8=EC=96=B4=EC=9E=A5=20(?=
+ =?UTF-8?q?=EA=B0=84=ED=8C=90=C2=B7=EB=A9=94=EB=89=B4=ED=8C=90=20=EB=8B=A8?=
+ =?UTF-8?q?=EC=96=B4=20=EC=A0=80=EC=9E=A5=20=ED=9B=84=20=EB=8B=A4=EC=8B=9C?=
+ =?UTF-8?q?=20=EB=93=A3=EA=B8=B0,=20=EC=9D=B4=20=EA=B8=B0=EA=B8=B0?=
+ =?UTF-8?q?=EC=97=90=EB=A7=8C=20=EC=A0=80=EC=9E=A5)=20(=EC=8B=9C=EC=A0=9C?=
+ =?UTF-8?q?=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../tools/hangul-reader/HangulReader.tsx      | 92 +++++++++++++++++--
+ content/en/tools.json                         |  5 +-
+ content/ko/tools.json                         |  5 +-
+ content/zh/tools.json                         |  5 +-
+ 4 files changed, 97 insertions(+), 10 deletions(-)
+
+diff --git a/app/[lang]/tools/hangul-reader/HangulReader.tsx b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+index bc98634..813fd1e 100644
+--- a/app/[lang]/tools/hangul-reader/HangulReader.tsx
++++ b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+@@ -28,6 +28,10 @@ export function HangulReader({
+ }) {
+   const isClient = useIsClient();
+   const [last, setLast] = useState<Letter | null>(null);
++  // 내 단어장: ☆ 누른 간판(s:id)·메뉴판 단어(m:id)를 이 기기에만 저장해요. (사전 앱의 단어장 방식)
++  const [saved, setSaved] = useStoredJSON<string[]>("kt:hangul:saved", []);
++  const toggle = (key: string) => setSaved(saved.includes(key) ? saved.filter((k) => k !== key) : [...saved, key]);
++  const star = { saved, toggle };
+ 
+   function tap(l: Letter) {
+     setLast(l);
+@@ -37,6 +41,7 @@ export function HangulReader({
+   return (
+     <div className="space-y-6">
+       <p className="text-sm text-muted">🔊 {ui.tapHint}</p>
++      {isClient && <WordBook ui={ui} saved={saved} signs={signs} menuWords={menuWords} toggle={toggle} />}
+       {last && (
+         <div aria-live="polite" className="rounded-2xl border-2 border-brand bg-brand-soft p-4 text-center">
+           <span lang="ko" className="text-5xl font-bold">
+@@ -74,18 +79,34 @@ export function HangulReader({
+ 
+       <SoundRules ui={ui} rules={soundRules} />
+ 
+-      <MenuWords ui={ui} words={menuWords} isClient={isClient} />
++      <MenuWords ui={ui} words={menuWords} isClient={isClient} star={star} />
+ 
+       <section className="rounded-2xl border border-line bg-card p-4">
+         <h2 className="mb-3 text-lg font-bold">🔤 {ui.quizTitle}</h2>
+         {/* 문제 순서는 무작위라서 브라우저에서만 만들어요 */}
+-        {isClient && <SignQuiz ui={ui} signs={signs} />}
++        {isClient && <SignQuiz ui={ui} signs={signs} star={star} />}
+       </section>
+     </div>
+   );
+ }
+ 
+-function SignQuiz({ ui, signs }: { ui: Ui; signs: Sign[] }) {
++type Star = { saved: string[]; toggle: (key: string) => void };
++
++function StarButton({ ui, on, onClick }: { ui: Ui; on: boolean; onClick: () => void }) {
++  return (
++    <button
++      type="button"
++      onClick={onClick}
++      aria-pressed={on}
++      aria-label={on ? ui.unsaveWord : ui.saveWord}
++      className={`rounded-lg border px-2 py-0.5 text-sm ${on ? "border-accent bg-warn-bg" : "border-line"}`}
++    >
++      {on ? "★" : "☆"}
++    </button>
++  );
++}
++
++function SignQuiz({ ui, signs, star }: { ui: Ui; signs: Sign[]; star: Star }) {
+   const [order, setOrder] = useState(() => shuffle(signs));
+   const [index, setIndex] = useState(0);
+   const [picked, setPicked] = useState<string | null>(null);
+@@ -197,7 +218,8 @@ function SignQuiz({ ui, signs }: { ui: Ui; signs: Sign[] }) {
+         <div aria-live="polite" className="space-y-2">
+           <p className="font-semibold">
+             {picked === sign.meaning ? ui.correct : ui.wrong.replace("{answer}", sign.meaning)}{" "}
+-            <span className="text-sm font-normal text-muted">({sign.roman})</span>
++            <span className="text-sm font-normal text-muted">({sign.roman})</span>{" "}
++            <StarButton ui={ui} on={star.saved.includes(`s:${sign.id}`)} onClick={() => star.toggle(`s:${sign.id}`)} />
+           </p>
+           <button type="button" onClick={next} className="w-full rounded-xl bg-brand px-4 py-3 font-semibold text-brand-ink">
+             {ui.next} →
+@@ -251,7 +273,7 @@ function SoundRules({ ui, rules }: { ui: Ui; rules: SoundRule[] }) {
+ 
+ // 메뉴판 읽기: 음식 이름 끝의 요리 방법(볶음·구이·찌개…) 12개. 예시 음식을 누르면 들려요.
+ // 휴대폰에서 길어지지 않게 접어 둬요.
+-function MenuWords({ ui, words, isClient }: { ui: Ui; words: MenuWord[]; isClient: boolean }) {
++function MenuWords({ ui, words, isClient, star }: { ui: Ui; words: MenuWord[]; isClient: boolean; star: Star }) {
+   return (
+     <details className="rounded-xl border border-line bg-card p-3">
+       <summary className="cursor-pointer font-bold">🍲 {ui.menuTitle}</summary>
+@@ -259,11 +281,16 @@ function MenuWords({ ui, words, isClient }: { ui: Ui; words: MenuWord[]; isClien
+       <ul className="mt-2 grid grid-cols-2 gap-2">
+         {words.map((w) => (
+           <li key={w.id} className="rounded-lg border border-line p-2">
+-            <p>
++            <p className="flex items-center gap-1">
+               <span lang="ko" className="text-lg font-bold">
+                 {w.ko}
+-              </span>{" "}
++              </span>
+               <span className="text-xs text-muted">{w.roman}</span>
++              {isClient && (
++                <span className="ml-auto">
++                  <StarButton ui={ui} on={star.saved.includes(`m:${w.id}`)} onClick={() => star.toggle(`m:${w.id}`)} />
++                </span>
++              )}
+             </p>
+             <p className="text-sm">{w.meaning}</p>
+             <button
+@@ -362,3 +389,54 @@ function MenuListenQuiz({ ui, words }: { ui: Ui; words: MenuWord[] }) {
+     </div>
+   );
+ }
++
++// 내 단어장: ☆ 누른 단어만 모아서 다시 듣기. 저장한 게 없으면 안 보여요. 휴대폰에서 길어지지 않게 접어 둬요.
++function WordBook({
++  ui,
++  saved,
++  signs,
++  menuWords,
++  toggle,
++}: {
++  ui: Ui;
++  saved: string[];
++  signs: Sign[];
++  menuWords: MenuWord[];
++  toggle: (key: string) => void;
++}) {
++  const items = saved
++    .map((key) => {
++      const [kind, id] = key.split(":");
++      if (kind === "s") {
++        const s = signs.find((x) => x.id === id);
++        return s && { key, ko: s.ko, roman: s.roman, meaning: s.meaning, say: s.ko };
++      }
++      const m = menuWords.find((x) => x.id === id);
++      return m && { key, ko: m.ko, roman: m.roman, meaning: m.meaning, say: m.example };
++    })
++    .filter((x) => !!x);
++  if (items.length === 0) return null;
++  return (
++    <details className="rounded-xl border-2 border-accent bg-card p-3">
++      <summary className="cursor-pointer font-bold">
++        ★ {ui.wordBookTitle} ({items.length})
++      </summary>
++      <ul className="mt-2 space-y-1">
++        {items.map((w) => (
++          <li key={w.key} className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2">
++            <button type="button" onClick={() => speakKorean(w.say)} className="flex flex-1 items-center gap-2 text-left">
++              <span aria-hidden>🔊</span>
++              <span lang="ko" className="font-bold">
++                {w.ko}
++              </span>
++              <span className="text-sm">{w.meaning}</span>
++            </button>
++            <button type="button" onClick={() => toggle(w.key)} aria-label={ui.unsaveWord} className="text-sm text-muted">
++              ✕
++            </button>
++          </li>
++        ))}
++      </ul>
++    </details>
++  );
++}
+diff --git a/content/en/tools.json b/content/en/tools.json
+index c358cc2..26b7437 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1026,7 +1026,10 @@
+       "menuTitle": "Read the menu",
+       "menuHint": "Korean dish names end with how the food is cooked. Learn these and you can guess most menus. Tap a dish to hear it.",
+       "menuQuizTitle": "Listening quiz",
+-      "menuQuizQuestion": "Tap 🔊 to hear a dish. Which word is in its name?"
++      "menuQuizQuestion": "Tap 🔊 to hear a dish. Which word is in its name?",
++      "saveWord": "Save to my words",
++      "unsaveWord": "Remove from my words",
++      "wordBookTitle": "My words"
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 9d15513..c02d54e 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1026,7 +1026,10 @@
+       "menuTitle": "메뉴판 읽기",
+       "menuHint": "한국 음식 이름 끝에는 요리 방법이 붙어요. 이것만 알면 메뉴 대부분을 짐작할 수 있어요. 음식 이름을 누르면 들려요.",
+       "menuQuizTitle": "듣기 퀴즈",
+-      "menuQuizQuestion": "🔊를 눌러 음식 이름을 들어 보세요. 어떤 말이 들어 있나요?"
++      "menuQuizQuestion": "🔊를 눌러 음식 이름을 들어 보세요. 어떤 말이 들어 있나요?",
++      "saveWord": "내 단어장에 저장",
++      "unsaveWord": "내 단어장에서 빼기",
++      "wordBookTitle": "내 단어장"
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 4cb2680..60905e0 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1026,7 +1026,10 @@
+       "menuTitle": "看懂菜单",
+       "menuHint": "韩国菜名的结尾通常是做法。记住这些，大部分菜单都能猜出来。点菜名可以听发音。",
+       "menuQuizTitle": "听力小测",
+-      "menuQuizQuestion": "点 🔊 听菜名。菜名里有哪个词？"
++      "menuQuizQuestion": "点 🔊 听菜名。菜名里有哪个词？",
++      "saveWord": "加入我的单词本",
++      "unsaveWord": "从单词本移除",
++      "wordBookTitle": "我的单词本"
+     }
+   },
+   "korean-numbers": {
+-- 
+2.43.0
+
