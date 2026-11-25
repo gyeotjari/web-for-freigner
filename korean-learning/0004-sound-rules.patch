@@ -1,0 +1,464 @@
+From b1127765aef0e7915112869a6674e04dd9539c32 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Wed, 25 Nov 2026 00:32:35 +0000
+Subject: [PATCH 4/6] =?UTF-8?q?=ED=95=9C=EA=B8=80=20=EC=9D=BD=EA=B8=B0:=20?=
+ =?UTF-8?q?=EC=86=8C=EB=A6=AC=20=EA=B7=9C=EC=B9=99(=EB=B0=9B=EC=B9=A8?=
+ =?UTF-8?q?=C2=B7=EC=97=B0=EC=9D=8C=C2=B7=EB=B9=84=EC=9D=8C=ED=99=94=20?=
+ =?UTF-8?q?=EB=93=B1=207=EA=B0=9C)=20=EC=B9=B4=EB=93=9C=20=EC=B6=94?=
+ =?UTF-8?q?=EA=B0=80=20(=EC=8B=9C=EC=A0=9C=ED=92=88,=20=EC=A1=B0=ED=95=AD?=
+ =?UTF-8?q?=20=ED=99=95=EC=9D=B8=20=ED=95=84=EC=9A=94)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../tools/hangul-reader/HangulReader.tsx      |  46 +++-
+ app/[lang]/tools/hangul-reader/page.tsx       |  17 +-
+ content/en/tools.json                         |   9 +-
+ content/ko/tools.json                         |   9 +-
+ content/zh/tools.json                         |   9 +-
+ data/hangul.json                              | 237 ++++++++++++++++++
+ 6 files changed, 322 insertions(+), 5 deletions(-)
+
+diff --git a/app/[lang]/tools/hangul-reader/HangulReader.tsx b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+index c80f6a3..13d0e61 100644
+--- a/app/[lang]/tools/hangul-reader/HangulReader.tsx
++++ b/app/[lang]/tools/hangul-reader/HangulReader.tsx
+@@ -10,8 +10,9 @@ type Ui = ToolUi<"hangul-reader">;
+ type Letter = { char: string; name: string; roman: string; example: string };
+ type Group = { id: string; name: string; letters: Letter[] };
+ type Sign = { id: string; ko: string; roman: string; meaning: string };
++export type SoundRule = { id: string; article: string; title: string; explain: string; examples: { word: string; sound: string }[] };
+ 
+-export function HangulReader({ ui, groups, signs }: { ui: Ui; groups: Group[]; signs: Sign[] }) {
++export function HangulReader({ ui, groups, signs, rules }: { ui: Ui; groups: Group[]; signs: Sign[]; rules: SoundRule[] }) {
+   const isClient = useIsClient();
+   const [last, setLast] = useState<Letter | null>(null);
+ 
+@@ -58,6 +59,8 @@ export function HangulReader({ ui, groups, signs }: { ui: Ui; groups: Group[]; s
+         </section>
+       ))}
+ 
++      <SoundRules ui={ui} rules={rules} />
++
+       <section className="rounded-2xl border border-line bg-card p-4">
+         <h2 className="mb-3 text-lg font-bold">🔤 {ui.quizTitle}</h2>
+         {/* 문제 순서는 무작위라서 브라우저에서만 만들어요 */}
+@@ -146,3 +149,44 @@ function SignQuiz({ ui, signs }: { ui: Ui; signs: Sign[] }) {
+     </div>
+   );
+ }
++
++// 소리 규칙: 글자와 실제 소리가 다른 대표 경우 (표준 발음법). 단어를 누르면 읽어 줘요.
++function SoundRules({ ui, rules }: { ui: Ui; rules: SoundRule[] }) {
++  return (
++    <section>
++      <h2 className="mb-1 text-lg font-bold">🗣️ {ui.soundTitle}</h2>
++      <p className="mb-2 text-sm text-muted">{ui.soundHint}</p>
++      <div className="space-y-2">
++        {rules.map((r) => (
++          <details key={r.id} className="rounded-xl border border-line bg-card p-3 open:border-brand">
++            <summary className="cursor-pointer font-semibold">{r.title}</summary>
++            <p className="mt-2 text-sm">{r.explain}</p>
++            <ul className="mt-2 grid grid-cols-2 gap-2">
++              {r.examples.map((e) => (
++                <li key={e.word}>
++                  <button
++                    type="button"
++                    onClick={() => speakKorean(e.word)}
++                    aria-label={`${e.word} ${ui.listen}`}
++                    className="w-full rounded-lg border border-line bg-bg px-2 py-2 text-left hover:border-brand"
++                  >
++                    <span lang="ko" className="font-bold">
++                      {e.word}
++                    </span>{" "}
++                    <span lang="ko" className="text-brand">
++                      [{e.sound}]
++                    </span>{" "}
++                    🔊
++                  </button>
++                </li>
++              ))}
++            </ul>
++            <p className="mt-2 text-xs text-muted">
++              {ui.soundSource} {r.article}
++            </p>
++          </details>
++        ))}
++      </div>
++    </section>
++  );
++}
+diff --git a/app/[lang]/tools/hangul-reader/page.tsx b/app/[lang]/tools/hangul-reader/page.tsx
+index 72b1623..d073620 100644
+--- a/app/[lang]/tools/hangul-reader/page.tsx
++++ b/app/[lang]/tools/hangul-reader/page.tsx
+@@ -12,6 +12,13 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/tools/hang
+   return toolMeta(SLUG, (await params).lang as Locale);
+ }
+ 
++function articleLabel(nums: number[], lang: Locale) {
++  const n = nums.join("·");
++  if (lang === "ko") return `제${n}항`;
++  if (lang === "zh") return `第${n}条`;
++  return `${nums.length > 1 ? "Articles" : "Article"} ${n}`;
++}
++
+ export default async function Page({ params }: PageProps<"/[lang]/tools/hangul-reader">) {
+   const lang = (await params).lang as Locale;
+   const content = getToolContent(SLUG, lang);
+@@ -19,6 +26,14 @@ export default async function Page({ params }: PageProps<"/[lang]/tools/hangul-r
+   const meaningLang: Locale = lang === "ko" ? "en" : lang;
+   const groups = hangul.groups.map((g) => ({ id: g.id, name: pick(g.name, lang), letters: g.letters }));
+   const signs = hangul.signs.map((s) => ({ id: s.id, ko: s.ko, roman: s.roman, meaning: pick(s.meaning, meaningLang) }));
++  const rules = hangul.soundRules.map((r) => ({
++    id: r.id,
++    // 조항 번호: 제18항 / Article 18 / 第18条
++    article: articleLabel(r.articles, lang),
++    title: pick(r.title, lang),
++    explain: pick(r.explain, lang),
++    examples: r.examples,
++  }));
+ 
+   return (
+     <ToolLayout
+@@ -33,7 +48,7 @@ export default async function Page({ params }: PageProps<"/[lang]/tools/hangul-r
+         { label: "Socinet (Ministry of Justice) — KIIP class fees from 2025", url: "https://www.socinet.go.kr/soci/comm/board/BoardPopup3.jsp", lastChecked: "2026-10-28" },
+       ]}
+     >
+-      <HangulReader ui={content.ui} groups={groups} signs={signs} />
++      <HangulReader ui={content.ui} groups={groups} signs={signs} rules={rules} />
+     </ToolLayout>
+   );
+ }
+diff --git a/content/en/tools.json b/content/en/tools.json
+index 578846b..9c2c0eb 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1002,6 +1002,10 @@
+       {
+         "q": "Where can I take Korean classes?",
+         "a": "If you have a residence card (ARC), try the government's Korea Immigration and Integration Program (KIIP, 사회통합프로그램). Sign up at socinet.go.kr; after a placement test you start at a level from 0 to 4. Level 0 is free; levels 1–4 cost 100,000 won each (half for full attendance). Level 5 (Korean society) is for permanent residence or citizenship and can help with those applications. (Ministry of Justice)"
++      },
++      {
++        "q": "Why does 감사합니다 sound like “gamsahamnida”?",
++        "a": "Some letters change sound next to others. Before ㄴ or ㅁ, ㅂ is read as [ㅁ]: 감사합니다 → [감사함니다]. See “Sound changes” for the most common rules."
+       }
+     ],
+     "ui": {
+@@ -1013,7 +1017,10 @@
+       "next": "Next",
+       "score": "Score",
+       "best": "Best streak",
+-      "listen": "Listen"
++      "listen": "Listen",
++      "soundTitle": "Sound changes",
++      "soundHint": "Korean is not always read letter by letter. Tap a word to hear it.",
++      "soundSource": "Standard Pronunciation Rules (National Institute of Korean Language),"
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 347c636..05811aa 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1002,6 +1002,10 @@
+       {
+         "q": "한국어 수업은 어디서 들을 수 있나요?",
+         "a": "외국인등록증이 있으면 법무부 사회통합프로그램(KIIP)을 들어 보세요. 사회통합정보망(socinet.go.kr)에서 신청하고, 사전평가 뒤 0~4단계 중 내 단계부터 시작해요. 0단계는 무료, 1~4단계는 단계마다 10만 원이에요 (100% 출석 등이면 절반). 5단계(한국사회 이해)는 영주·귀화용이라 그 신청에 도움이 돼요. (법무부)"
++      },
++      {
++        "q": "감사합니다가 왜 [감사함니다]로 들려요?",
++        "a": "옆 글자에 따라 소리가 바뀌는 글자가 있어요. ㄴ·ㅁ 앞의 ㅂ은 [ㅁ]으로 읽어요: 감사합니다 → [감사함니다]. 자주 나오는 규칙은 \"소리 규칙\"에서 볼 수 있어요."
+       }
+     ],
+     "ui": {
+@@ -1013,7 +1017,10 @@
+       "next": "다음",
+       "score": "점수",
+       "best": "최고 연속 정답",
+-      "listen": "듣기"
++      "listen": "듣기",
++      "soundTitle": "소리 규칙",
++      "soundHint": "한국어는 글자 그대로 읽지 않을 때가 있어요. 단어를 누르면 들을 수 있어요.",
++      "soundSource": "국립국어원 표준 발음법"
+     }
+   },
+   "korean-numbers": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index f395fb2..37cb575 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1002,6 +1002,10 @@
+       {
+         "q": "在哪里可以上韩语课？",
+         "a": "如果有外国人登录证，可以参加法务部的社会统合项目（KIIP，사회통합프로그램）。在socinet.go.kr报名，分级测试后从0~4级中的相应级别开始。0级免费，1~4级每级10万韩元（全勤等可减半）。5级（了解韩国社会）面向永住和入籍，对相关申请有帮助。（法务部）"
++      },
++      {
++        "q": "为什么감사합니다听起来像[감사함니다]？",
++        "a": "有些字母会因旁边的字母而改变发音。在ㄴ·ㅁ前，ㅂ读成[ㅁ]：감사합니다 → [감사함니다]。常见规则请看“音变规则”。"
+       }
+     ],
+     "ui": {
+@@ -1013,7 +1017,10 @@
+       "next": "下一题",
+       "score": "得分",
+       "best": "最高连对",
+-      "listen": "朗读"
++      "listen": "朗读",
++      "soundTitle": "音变规则",
++      "soundHint": "韩语并不总是按字母逐个读。点击单词可以听发音。",
++      "soundSource": "国立国语院《标准发音法》"
+     }
+   },
+   "korean-numbers": {
+diff --git a/data/hangul.json b/data/hangul.json
+index 26f6541..506700c 100644
+--- a/data/hangul.json
++++ b/data/hangul.json
+@@ -635,5 +635,242 @@
+         "zh": "免费"
+       }
+     }
++  ],
++  "soundRulesHelp": "소리 규칙 카드. articles=표준 발음법 조항 번호(국립국어원 표준어 규정 제2부), examples의 sound=[실제 소리]. 목록 맨 끝에만 추가하세요.",
++  "soundRulesLastChecked": "CHECK_NEEDED",
++  "soundRulesCheckNote": "표준 발음법 조항 번호·예시를 국립국어원 원문(korean.go.kr 표준어 규정 제2부)과 대조해 주세요. 자동 작업 환경에서 국립국어원 사이트에 접속하지 못했어요.",
++  "soundRulesSource": "CHECK_NEEDED (국립국어원 korean.go.kr 표준어 규정 제2부 원문 주소)",
++  "soundRules": [
++    {
++      "id": "final7",
++      "articles": [
++        8,
++        9
++      ],
++      "title": {
++        "en": "Final consonants: only 7 sounds",
++        "ko": "받침 소리는 7개뿐",
++        "zh": "收音只有7种发音"
++      },
++      "explain": {
++        "en": "At the end of a syllable, many letters sound the same. ㅋ→[ㄱ], ㅅ·ㅈ·ㅊ·ㅌ→[ㄷ], ㅍ→[ㅂ].",
++        "ko": "받침에서는 여러 글자가 같은 소리가 나요. ㅋ→[ㄱ], ㅅ·ㅈ·ㅊ·ㅌ→[ㄷ], ㅍ→[ㅂ].",
++        "zh": "在收音位置，很多字母发音相同。ㅋ→[ㄱ]，ㅅ·ㅈ·ㅊ·ㅌ→[ㄷ]，ㅍ→[ㅂ]。"
++      },
++      "examples": [
++        {
++          "word": "부엌",
++          "sound": "부억"
++        },
++        {
++          "word": "옷",
++          "sound": "옫"
++        },
++        {
++          "word": "꽃",
++          "sound": "꼳"
++        },
++        {
++          "word": "앞",
++          "sound": "압"
++        }
++      ]
++    },
++    {
++      "id": "linking",
++      "articles": [
++        13
++      ],
++      "title": {
++        "en": "Linking: the final moves to the next vowel",
++        "ko": "연음: 받침이 다음 모음으로 넘어가요",
++        "zh": "连音：收音移到后面的元音"
++      },
++      "explain": {
++        "en": "If the next syllable starts with ㅇ (no sound), the final consonant is read with it.",
++        "ko": "뒤 글자가 ㅇ(소리 없음)으로 시작하면 받침을 뒤 글자에 붙여 읽어요.",
++        "zh": "如果后一个字以ㅇ（不发音）开头，收音就和它连在一起读。"
++      },
++      "examples": [
++        {
++          "word": "음악",
++          "sound": "으막"
++        },
++        {
++          "word": "한국어",
++          "sound": "한구거"
++        },
++        {
++          "word": "직업",
++          "sound": "지겁"
++        },
++        {
++          "word": "옷이",
++          "sound": "오시"
++        }
++      ]
++    },
++    {
++      "id": "h",
++      "articles": [
++        12
++      ],
++      "title": {
++        "en": "ㅎ: disappears or makes sounds stronger",
++        "ko": "ㅎ: 사라지거나 소리를 거세게",
++        "zh": "ㅎ：脱落或使发音变送气"
++      },
++      "explain": {
++        "en": "A final ㅎ before a vowel is silent. ㅎ next to ㄱ·ㄷ·ㅂ·ㅈ makes [ㅋ·ㅌ·ㅍ·ㅊ].",
++        "ko": "받침 ㅎ 뒤에 모음이 오면 ㅎ은 소리가 안 나요. ㅎ이 ㄱ·ㄷ·ㅂ·ㅈ과 만나면 [ㅋ·ㅌ·ㅍ·ㅊ]가 돼요.",
++        "zh": "收音ㅎ后面接元音时不发音。ㅎ和ㄱ·ㄷ·ㅂ·ㅈ相遇时变成[ㅋ·ㅌ·ㅍ·ㅊ]。"
++      },
++      "examples": [
++        {
++          "word": "좋아요",
++          "sound": "조아요"
++        },
++        {
++          "word": "놓고",
++          "sound": "노코"
++        },
++        {
++          "word": "축하",
++          "sound": "추카"
++        },
++        {
++          "word": "입학",
++          "sound": "이팍"
++        }
++      ]
++    },
++    {
++      "id": "nasal",
++      "articles": [
++        18
++      ],
++      "title": {
++        "en": "Before ㄴ·ㅁ: ㄱ→[ㅇ], ㄷ→[ㄴ], ㅂ→[ㅁ]",
++        "ko": "ㄴ·ㅁ 앞에서: ㄱ→[ㅇ], ㄷ→[ㄴ], ㅂ→[ㅁ]",
++        "zh": "在ㄴ·ㅁ前：ㄱ→[ㅇ]，ㄷ→[ㄴ]，ㅂ→[ㅁ]"
++      },
++      "explain": {
++        "en": "This is why 감사합니다 sounds like [감사함니다].",
++        "ko": "그래서 감사합니다가 [감사함니다]로 들려요.",
++        "zh": "所以감사합니다听起来像[감사함니다]。"
++      },
++      "examples": [
++        {
++          "word": "감사합니다",
++          "sound": "감사함니다"
++        },
++        {
++          "word": "입니다",
++          "sound": "임니다"
++        },
++        {
++          "word": "국물",
++          "sound": "궁물"
++        },
++        {
++          "word": "먹는",
++          "sound": "멍는"
++        }
++      ]
++    },
++    {
++      "id": "liquid",
++      "articles": [
++        20
++      ],
++      "title": {
++        "en": "ㄴ next to ㄹ becomes [ㄹ]",
++        "ko": "ㄴ이 ㄹ을 만나면 [ㄹ]",
++        "zh": "ㄴ遇到ㄹ变成[ㄹ]"
++      },
++      "explain": {
++        "en": "ㄴ before or after ㄹ is read as [ㄹ].",
++        "ko": "ㄴ이 ㄹ 앞이나 뒤에 오면 [ㄹ]로 읽어요.",
++        "zh": "ㄴ在ㄹ前面或后面时读成[ㄹ]。"
++      },
++      "examples": [
++        {
++          "word": "설날",
++          "sound": "설랄"
++        },
++        {
++          "word": "연락",
++          "sound": "열락"
++        },
++        {
++          "word": "신라",
++          "sound": "실라"
++        }
++      ]
++    },
++    {
++      "id": "tense",
++      "articles": [
++        23
++      ],
++      "title": {
++        "en": "After ㄱ·ㄷ·ㅂ sounds, the next consonant gets tense",
++        "ko": "ㄱ·ㄷ·ㅂ 소리 뒤에서는 된소리",
++        "zh": "在ㄱ·ㄷ·ㅂ音后面，后一个辅音变紧音"
++      },
++      "explain": {
++        "en": "After a final [ㄱ·ㄷ·ㅂ], ㄱ·ㄷ·ㅂ·ㅅ·ㅈ become [ㄲ·ㄸ·ㅃ·ㅆ·ㅉ].",
++        "ko": "받침 [ㄱ·ㄷ·ㅂ] 뒤의 ㄱ·ㄷ·ㅂ·ㅅ·ㅈ은 [ㄲ·ㄸ·ㅃ·ㅆ·ㅉ]로 읽어요.",
++        "zh": "收音[ㄱ·ㄷ·ㅂ]后面的ㄱ·ㄷ·ㅂ·ㅅ·ㅈ读成[ㄲ·ㄸ·ㅃ·ㅆ·ㅉ]。"
++      },
++      "examples": [
++        {
++          "word": "학교",
++          "sound": "학꾜"
++        },
++        {
++          "word": "식당",
++          "sound": "식땅"
++        },
++        {
++          "word": "약국",
++          "sound": "약꾹"
++        },
++        {
++          "word": "국밥",
++          "sound": "국빱"
++        }
++      ]
++    },
++    {
++      "id": "palatal",
++      "articles": [
++        17
++      ],
++      "title": {
++        "en": "ㄷ·ㅌ + 이 → [지·치]",
++        "ko": "ㄷ·ㅌ + 이 → [지·치]",
++        "zh": "ㄷ·ㅌ + 이 → [지·치]"
++      },
++      "explain": {
++        "en": "A final ㄷ or ㅌ before 이 is read as [ㅈ] or [ㅊ].",
++        "ko": "받침 ㄷ·ㅌ 뒤에 이가 오면 [ㅈ·ㅊ]로 읽어요.",
++        "zh": "收音ㄷ·ㅌ后面接이时，读成[ㅈ·ㅊ]。"
++      },
++      "examples": [
++        {
++          "word": "같이",
++          "sound": "가치"
++        },
++        {
++          "word": "굳이",
++          "sound": "구지"
++        },
++        {
++          "word": "해돋이",
++          "sound": "해도지"
++        }
++      ]
++    }
+   ]
+ }
+-- 
+2.43.0
+

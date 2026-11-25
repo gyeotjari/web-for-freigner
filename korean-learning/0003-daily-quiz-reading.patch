@@ -1,0 +1,198 @@
+From f32a3e724f9bd77b459d32afc6e68a2f2ec66989 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Wed, 25 Nov 2026 00:29:47 +0000
+Subject: [PATCH 3/6] =?UTF-8?q?=EC=98=A4=EB=8A=98=EC=9D=98=20=ED=80=B4?=
+ =?UTF-8?q?=EC=A6=88:=20=EC=82=AC=ED=9D=98=20=EC=A4=91=20=ED=95=98?=
+ =?UTF-8?q?=EB=A3=A8=EB=8A=94=20=EA=B0=80=EA=B2=A9=20=EB=8C=80=EC=8B=A0=20?=
+ =?UTF-8?q?=EC=84=B8=EA=B8=B0=C2=B7=EC=8B=9C=EA=B0=81=20=EC=9D=BD=EA=B8=B0?=
+ =?UTF-8?q?=20=EB=AC=B8=EC=A0=9C=20(=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ app/[lang]/tools/daily-quiz/DailyQuiz.tsx |  9 ++++--
+ content/en/tools.json                     |  7 +++-
+ content/ko/tools.json                     |  7 +++-
+ content/zh/tools.json                     |  7 +++-
+ lib/quiz-reading.ts                       | 39 +++++++++++++++++++++++
+ 5 files changed, 63 insertions(+), 6 deletions(-)
+ create mode 100644 lib/quiz-reading.ts
+
+diff --git a/app/[lang]/tools/daily-quiz/DailyQuiz.tsx b/app/[lang]/tools/daily-quiz/DailyQuiz.tsx
+index 8b99f00..22332a8 100644
+--- a/app/[lang]/tools/daily-quiz/DailyQuiz.tsx
++++ b/app/[lang]/tools/daily-quiz/DailyQuiz.tsx
+@@ -4,13 +4,14 @@ import { useMemo, useState } from "react";
+ import { formatNumber } from "@/components/parts/Calculator";
+ import { numberToKorean } from "@/lib/korean-number";
+ import { makeChoices, seededRandom, shuffle } from "@/lib/quiz";
++import { readingQuestion } from "@/lib/quiz-reading";
+ import { speakKorean } from "@/lib/speech";
+ import { useIsClient, useStoredJSON } from "@/lib/storage";
+ import type { ToolUi } from "@/lib/content";
+ 
+ type Ui = ToolUi<"daily-quiz">;
+ type Item = { ko: string; meaning: string };
+-type Question = { type: "meaning" | "sign" | "number"; prompt: string; speak?: string; answer: string; choices: string[] };
++type Question = { type: "meaning" | "sign" | "number" | "reading"; prompt: string; speak?: string; answer: string; choices: string[] };
+ type Results = Record<string, { score: number; picks: string[] }>;
+ 
+ const TOTAL = 5;
+@@ -26,7 +27,7 @@ function hash(s: string) {
+   return h >>> 0;
+ }
+ 
+-// 날짜로 정해지는 오늘의 5문제: 문장 2 + 간판 2 + 가격 1
++// 날짜로 정해지는 오늘의 5문제: 문장 2 + 간판 2 + (가격 또는 세기·시각) 1
+ function buildQuiz(date: string, phrasePool: Item[], signPool: Item[]): Question[] {
+   const rand = seededRandom(hash(date));
+   const phrases = shuffle(phrasePool, rand).slice(0, 2);
+@@ -48,6 +49,7 @@ function buildQuiz(date: string, phrasePool: Item[], signPool: Item[]): Question
+     })),
+   ];
+   // 가격 문제: 헷갈리기 쉬운 비슷한 숫자를 보기로 넣어요
++  // (사흘 중 하루는 가격 대신 세기·시각 문제. 이 rand()는 맨 뒤에서 뽑아서 문장·간판 문제는 그대로예요)
+   const price = (Math.floor(rand() * 90) + 10) * 500; // 5,000 ~ 49,500
+   const near = [price + 1000, price - 500, price * 10, price + 10000].filter((n) => n > 0 && n !== price);
+   qs.push({
+@@ -56,6 +58,7 @@ function buildQuiz(date: string, phrasePool: Item[], signPool: Item[]): Question
+     answer: `${numberToKorean(price)} 원`,
+     choices: shuffle([price, ...shuffle(near, rand).slice(0, 3)], rand).map((n) => `${numberToKorean(n)} 원`),
+   });
++  if (rand() < 1 / 3) qs[qs.length - 1] = readingQuestion(rand);
+   return shuffle(qs, rand).slice(0, TOTAL);
+ }
+ 
+@@ -147,7 +150,7 @@ function QuizBody({ ui, phrasePool, signPool }: { ui: Ui; phrasePool: Item[]; si
+ 
+   const q = questions[index];
+   const picked = picks[index];
+-  const label = q.type === "meaning" ? ui.typeMeaning : q.type === "sign" ? ui.typeSign : ui.typeNumber;
++  const label = q.type === "meaning" ? ui.typeMeaning : q.type === "sign" ? ui.typeSign : q.type === "reading" ? ui.typeReading : ui.typeNumber;
+   const isLast = index === TOTAL - 1;
+ 
+   function choose(c: string) {
+diff --git a/content/en/tools.json b/content/en/tools.json
+index 57056e9..578846b 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1096,6 +1096,10 @@
+       {
+         "q": "Is my progress saved if I change phones?",
+         "a": "No — progress is saved only in this browser."
++      },
++      {
++        "q": "Why is there a question about 2명 or 3:20?",
++        "a": "Some days, the price question is replaced by counting or time. Things, people and hours use native numbers (두 명, 세 시), but minutes use Sino-Korean numbers (이십 분)."
+       }
+     ],
+     "ui": {
+@@ -1112,7 +1116,8 @@
+       "comeBack": "New questions tomorrow.",
+       "played": "Days played",
+       "streak": "Day streak",
+-      "review": "Review answers"
++      "review": "Review answers",
++      "typeReading": "How do you read this?"
+     }
+   },
+   "currency-converter": {
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index a4e72f9..347c636 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1096,6 +1096,10 @@
+       {
+         "q": "휴대폰을 바꾸면 기록이 남나요?",
+         "a": "아니요. 기록은 이 브라우저에만 저장돼요."
++      },
++      {
++        "q": "왜 2명, 3:20 같은 문제가 나와요?",
++        "a": "어떤 날은 가격 문제 대신 세기·시각 문제가 나와요. 물건·사람·시는 고유어 수(두 명, 세 시), 분은 한자어 수(이십 분)로 읽어요."
+       }
+     ],
+     "ui": {
+@@ -1112,7 +1116,8 @@
+       "comeBack": "내일 새 문제가 나와요.",
+       "played": "푼 날",
+       "streak": "연속 일수",
+-      "review": "정답 다시 보기"
++      "review": "정답 다시 보기",
++      "typeReading": "이건 어떻게 읽을까요?"
+     }
+   },
+   "currency-converter": {
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 2087358..f395fb2 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1096,6 +1096,10 @@
+       {
+         "q": "换手机后记录还在吗？",
+         "a": "不在，记录只保存在这个浏览器里。"
++      },
++      {
++        "q": "为什么会出现 2명、3:20 这样的题？",
++        "a": "有些天会用数数或时间题代替价格题。东西、人数和“点”用固有词数字（두 명、세 시），“分”用汉字词数字（이십 분）。"
+       }
+     ],
+     "ui": {
+@@ -1112,7 +1116,8 @@
+       "comeBack": "明天有新题目。",
+       "played": "答题天数",
+       "streak": "连续天数",
+-      "review": "查看答案"
++      "review": "查看答案",
++      "typeReading": "这个怎么读？"
+     }
+   },
+   "currency-converter": {
+diff --git a/lib/quiz-reading.ts b/lib/quiz-reading.ts
+new file mode 100644
+index 0000000..9478710
+--- /dev/null
++++ b/lib/quiz-reading.ts
+@@ -0,0 +1,39 @@
++import { numberToKorean } from "./korean-number";
++import { nativeKorean } from "./native-number";
++import { shuffle } from "./quiz";
++import { timeKorean } from "./time-date-korean";
++
++// 고유어 수 문제: "2명"·"3:20"을 어떻게 읽는지. 한자어 수와 섞은 오답을 보기로 넣어요.
++const COUNT_ITEMS = [
++  { unit: "개", max: 10 },
++  { unit: "명", max: 10 },
++  { unit: "살", max: 40 },
++  { unit: "잔", max: 5 },
++  { unit: "병", max: 5 },
++];
++
++// 정답 + 겹치지 않는 오답 3개
++function pick(answer: string, wrong: string[], rand: () => number) {
++  const others = [...new Set(wrong)].filter((w) => w !== answer).slice(0, 3);
++  return shuffle([answer, ...others], rand);
++}
++
++export function readingQuestion(rand: () => number) {
++  if (rand() < 0.5) {
++    const c = COUNT_ITEMS[Math.floor(rand() * COUNT_ITEMS.length)];
++    const n = 1 + Math.floor(rand() * c.max);
++    const answer = `${nativeKorean(n, true)} ${c.unit}`;
++    const other = n < c.max ? n + 1 : n - 1;
++    // 한자어로 읽기(이 명), 숫자 틀리기, 줄어든 꼴 안 쓰기(하나 개) — 흔한 실수 순서로 골라요
++    const wrong = [`${numberToKorean(n)} ${c.unit}`, `${nativeKorean(other, true)} ${c.unit}`, `${nativeKorean(n)} ${c.unit}`, `${numberToKorean(other)} ${c.unit}`];
++    return { type: "reading" as const, prompt: `${n}${c.unit}`, answer, choices: pick(answer, wrong, rand) };
++  }
++  const h = 1 + Math.floor(rand() * 12);
++  const m = (1 + Math.floor(rand() * 11)) * 5;
++  const answer = timeKorean(h, m);
++  const sinoHour = `${numberToKorean(h)} 시 ${numberToKorean(m)} 분`; // 시를 한자어로 읽는 흔한 실수
++  const nativeMin = `${nativeKorean(h, true)} 시 ${nativeKorean(m, true)} 분`; // 분까지 고유어로 읽는 실수
++  const otherHour = timeKorean(h === 12 ? 11 : h + 1, m);
++  const wrong = [sinoHour, nativeMin, otherHour];
++  return { type: "reading" as const, prompt: `${h}:${String(m).padStart(2, "0")}`, answer, choices: pick(answer, wrong, rand) };
++}
+-- 
+2.43.0
+

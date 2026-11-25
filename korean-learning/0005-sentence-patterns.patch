@@ -1,0 +1,791 @@
+From a18b1a4169eadd637f2564a2f540891f0a7c0086 Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Wed, 25 Nov 2026 00:34:49 +0000
+Subject: [PATCH 5/6] =?UTF-8?q?=EC=83=88=20=EB=8F=84=EA=B5=AC:=20=EB=AC=B8?=
+ =?UTF-8?q?=EC=9E=A5=20=ED=8B=80=EB=A1=9C=20=EB=A7=90=ED=95=98=EA=B8=B0=20?=
+ =?UTF-8?q?(=E2=97=8B=E2=97=8B=20=EC=A3=BC=EC=84=B8=EC=9A=94=20=EB=93=B1?=
+ =?UTF-8?q?=208=EA=B0=9C,=20(=EC=9C=BC)=EB=A1=9C=20=EC=9E=90=EB=8F=99)=20(?=
+ =?UTF-8?q?=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../sentence-patterns/SentenceBuilder.tsx     |  88 ++++
+ app/[lang]/tools/sentence-patterns/page.tsx   |  32 ++
+ content/en/tools.json                         |  23 +
+ content/ko/tools.json                         |  23 +
+ content/zh/tools.json                         |  23 +
+ data/related-tools.json                       |   3 +-
+ data/sentence-patterns.json                   | 447 ++++++++++++++++++
+ data/tools.json                               |   7 +-
+ lib/particle.ts                               |  13 +
+ lib/text-registry.ts                          |   3 +
+ 10 files changed, 660 insertions(+), 2 deletions(-)
+ create mode 100644 app/[lang]/tools/sentence-patterns/SentenceBuilder.tsx
+ create mode 100644 app/[lang]/tools/sentence-patterns/page.tsx
+ create mode 100644 data/sentence-patterns.json
+ create mode 100644 lib/particle.ts
+
+diff --git a/app/[lang]/tools/sentence-patterns/SentenceBuilder.tsx b/app/[lang]/tools/sentence-patterns/SentenceBuilder.tsx
+new file mode 100644
+index 0000000..157f33e
+--- /dev/null
++++ b/app/[lang]/tools/sentence-patterns/SentenceBuilder.tsx
+@@ -0,0 +1,88 @@
++"use client";
++
++import { useState } from "react";
++import { withEuro } from "@/lib/particle";
++import { speakKorean } from "@/lib/speech";
++import { useStoredJSON } from "@/lib/storage";
++import type { ToolUi } from "@/lib/content";
++
++type Ui = ToolUi<"sentence-patterns">;
++type Word = { ko: string; meaning: string };
++export type Frame = { id: string; pattern: string; meaning: string; tip: string; words: Word[] };
++
++// 틀의 {N} 자리에 단어를 넣어요. {N}(으)로 는 받침에 맞게 으로/로를 붙여요.
++export function fillPattern(pattern: string, word: string) {
++  return pattern.replace("{N}(으)로", withEuro(word)).replace("{N}", word);
++}
++
++export function SentenceBuilder({ ui, frames }: { ui: Ui; frames: Frame[] }) {
++  const [frameId, setFrameId] = useStoredJSON("kt:patterns:frame", frames[0].id);
++  const frame = frames.find((f) => f.id === frameId) ?? frames[0];
++  const [wordIndex, setWordIndex] = useState(0);
++  const word = frame.words[wordIndex] ?? frame.words[0];
++  const sentence = fillPattern(frame.pattern, word.ko);
++
++  return (
++    <div className="space-y-4">
++      {/* 1. 문장 틀 고르기 */}
++      <section>
++        <h2 className="mb-2 font-bold">1. {ui.pickPattern}</h2>
++        <div className="flex flex-wrap gap-2">
++          {frames.map((f) => (
++            <button
++              key={f.id}
++              type="button"
++              onClick={() => {
++                setFrameId(f.id);
++                setWordIndex(0);
++              }}
++              aria-pressed={f.id === frame.id}
++              className={`rounded-full border-2 px-3 py-1.5 font-semibold ${f.id === frame.id ? "border-brand bg-brand-soft" : "border-line bg-card"}`}
++            >
++              <span lang="ko">{f.pattern.replace("{N}(으)로", "○○(으)로").replace("{N}", "○○")}</span>
++            </button>
++          ))}
++        </div>
++        <p className="mt-2 text-sm text-muted">
++          {frame.meaning.replace("{N}", "○○")} · {frame.tip}
++        </p>
++      </section>
++
++      {/* 2. 단어 고르기 */}
++      <section>
++        <h2 className="mb-2 font-bold">2. {ui.pickWord}</h2>
++        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
++          {frame.words.map((w, i) => (
++            <button
++              key={w.ko}
++              type="button"
++              onClick={() => {
++                setWordIndex(i);
++                speakKorean(fillPattern(frame.pattern, w.ko));
++              }}
++              aria-pressed={i === wordIndex}
++              className={`rounded-xl border-2 p-2 text-left ${i === wordIndex ? "border-brand bg-brand-soft" : "border-line bg-card"}`}
++            >
++              <span lang="ko" className="block font-bold">
++                {w.ko}
++              </span>
++              <span className="block text-xs text-muted">{w.meaning}</span>
++            </button>
++          ))}
++        </div>
++      </section>
++
++      {/* 3. 완성된 문장 (직원에게 보여 줄 수 있게 크게) */}
++      <section aria-live="polite" className="rounded-2xl border-2 border-brand bg-card p-5 text-center">
++        <p className="text-sm font-semibold text-muted">{ui.result}</p>
++        <p lang="ko" className="mt-1 text-3xl font-bold">
++          {sentence}
++        </p>
++        <p className="mt-1 text-sm">{frame.meaning.replace("{N}", word.meaning)}</p>
++        <button type="button" onClick={() => speakKorean(sentence)} className="mt-3 w-full rounded-xl bg-brand py-3 font-semibold text-brand-ink">
++          🔊 {ui.listen}
++        </button>
++      </section>
++    </div>
++  );
++}
+diff --git a/app/[lang]/tools/sentence-patterns/page.tsx b/app/[lang]/tools/sentence-patterns/page.tsx
+new file mode 100644
+index 0000000..bd029b9
+--- /dev/null
++++ b/app/[lang]/tools/sentence-patterns/page.tsx
+@@ -0,0 +1,32 @@
++import type { Metadata } from "next";
++import { pick, type Locale } from "@/lib/i18n";
++import { toolMeta } from "@/lib/data";
++import { getToolContent } from "@/lib/content";
++import { ToolLayout } from "@/components/ToolLayout";
++import data from "@/data/sentence-patterns.json";
++import { SentenceBuilder } from "./SentenceBuilder";
++
++const SLUG = "sentence-patterns";
++
++export async function generateMetadata({ params }: PageProps<"/[lang]/tools/sentence-patterns">): Promise<Metadata> {
++  return toolMeta(SLUG, (await params).lang as Locale);
++}
++
++export default async function Page({ params }: PageProps<"/[lang]/tools/sentence-patterns">) {
++  const lang = (await params).lang as Locale;
++  const content = getToolContent(SLUG, lang);
++  // 한국어 화면에서는 뜻 대신 영어 뜻을 보여 줘요 (한국어 뜻은 문장 그대로라 의미가 없어요)
++  const meaningLang: Locale = lang === "ko" ? "en" : lang;
++  const frames = data.frames.map((f) => ({
++    id: f.id,
++    pattern: f.pattern,
++    meaning: pick(f.meaning, meaningLang),
++    tip: pick(f.tip, lang),
++    words: f.words.map((w) => ({ ko: w.ko, meaning: pick(w.meaning, meaningLang) })),
++  }));
++  return (
++    <ToolLayout lang={lang} slug={SLUG} about={content.about} faq={content.faq} sources={[]}>
++      <SentenceBuilder ui={content.ui} frames={frames} />
++    </ToolLayout>
++  );
++}
+diff --git a/content/en/tools.json b/content/en/tools.json
+index 9c2c0eb..524a773 100644
+--- a/content/en/tools.json
++++ b/content/en/tools.json
+@@ -1851,5 +1851,28 @@
+       "phrases": "Show this to the staff",
+       "abroad": "Sending abroad? International parcels (EMS)"
+     }
++  },
++  "sentence-patterns": {
++    "about": [
++      "Learn a pattern once, then use it with many words.",
++      "Pick a pattern, then tap a word. You will hear the full sentence.",
++      "Show the big sentence to staff if speaking is hard."
++    ],
++    "faq": [
++      {
++        "q": "Why is there no 이/가 or 을/를?",
++        "a": "In everyday speech, Koreans often drop these small words. 물 주세요 sounds natural."
++      },
++      {
++        "q": "Where can I find more phrases?",
++        "a": "Survival Phrases has ready-made sentences for each situation."
++      }
++    ],
++    "ui": {
++      "pickPattern": "Pick a pattern",
++      "pickWord": "Pick a word",
++      "result": "Your sentence",
++      "listen": "Listen"
++    }
+   }
+ }
+diff --git a/content/ko/tools.json b/content/ko/tools.json
+index 05811aa..874a03b 100644
+--- a/content/ko/tools.json
++++ b/content/ko/tools.json
+@@ -1851,5 +1851,28 @@
+       "phrases": "직원에게 보여주세요",
+       "abroad": "외국으로 보내나요? 해외 택배(EMS)"
+     }
++  },
++  "sentence-patterns": {
++    "about": [
++      "틀 하나를 익히면 여러 단어로 바꿔 쓸 수 있어요.",
++      "틀을 고르고 단어를 누르면 완성된 문장을 읽어 줘요.",
++      "말하기 어려우면 큰 글씨 문장을 직원에게 보여 주세요."
++    ],
++    "faq": [
++      {
++        "q": "왜 이/가, 을/를이 없어요?",
++        "a": "일상 대화에서는 이런 조사를 자주 빼고 말해요. \"물 주세요\"가 자연스러워요."
++      },
++      {
++        "q": "문장이 더 필요해요.",
++        "a": "상황별 생존 한국어에 상황마다 바로 쓰는 문장이 있어요."
++      }
++    ],
++    "ui": {
++      "pickPattern": "문장 틀 고르기",
++      "pickWord": "단어 고르기",
++      "result": "완성된 문장",
++      "listen": "듣기"
++    }
+   }
+ }
+diff --git a/content/zh/tools.json b/content/zh/tools.json
+index 37cb575..425e091 100644
+--- a/content/zh/tools.json
++++ b/content/zh/tools.json
+@@ -1851,5 +1851,28 @@
+       "phrases": "给工作人员看",
+       "abroad": "要寄到国外？国际快递（EMS）"
+     }
++  },
++  "sentence-patterns": {
++    "about": [
++      "学会一个句型，就能换上很多单词来用。",
++      "选择句型，再点单词，就会读出完整的句子。",
++      "说不出口时，可以把大字句子给店员看。"
++    ],
++    "faq": [
++      {
++        "q": "为什么没有 이/가、을/를？",
++        "a": "日常口语中韩国人常省略这些助词。물 주세요 听起来很自然。"
++      },
++      {
++        "q": "想要更多句子。",
++        "a": "“情景生存韩语”里有各个场景可直接使用的句子。"
++      }
++    ],
++    "ui": {
++      "pickPattern": "选择句型",
++      "pickWord": "选择单词",
++      "result": "完成的句子",
++      "listen": "听"
++    }
+   }
+ }
+diff --git a/data/related-tools.json b/data/related-tools.json
+index 72af1cc..cdf5b6c 100644
+--- a/data/related-tools.json
++++ b/data/related-tools.json
+@@ -43,5 +43,6 @@
+   "boiler-guide": ["building-fees", "landlord-messages", "trash-sorting"],
+   "lost-items": ["emergency-numbers", "bank-account-helper", "arc-document-checker"],
+   "building-fees": ["boiler-guide", "rent-calculator", "trash-sorting"],
+-  "identity-verification": ["phone-setup", "bank-account-helper", "useful-apps"]
++  "identity-verification": ["phone-setup", "bank-account-helper", "useful-apps"],
++  "sentence-patterns": ["survival-phrases", "korean-numbers", "korean-politeness"]
+ }
+diff --git a/data/sentence-patterns.json b/data/sentence-patterns.json
+new file mode 100644
+index 0000000..f115fa6
+--- /dev/null
++++ b/data/sentence-patterns.json
+@@ -0,0 +1,447 @@
++{
++  "_help": "문장 틀 연습 데이터. pattern의 {N} 자리에 words의 ko를 넣어요. meaning의 {N}에는 단어 뜻이 들어가요. {N}(으)로 는 받침에 따라 으로/로를 자동으로 붙여요(받침 없음·ㄹ 받침 → 로). 목록은 맨 끝에만 추가하세요.",
++  "lastChecked": "CHECK_NEEDED",
++  "checkNote": "원어민 검수 전이에요: 문장의 자연스러움(특히 '○○ 돼요?'), 영어·중국어 뜻을 확인해 주세요.",
++  "frames": [
++    {
++      "id": "give",
++      "pattern": "{N} 주세요",
++      "meaning": {
++        "en": "{N}, please.",
++        "ko": "○○ 주세요",
++        "zh": "请给我{N}。"
++      },
++      "tip": {
++        "en": "The most useful pattern. Add any thing you want.",
++        "ko": "가장 많이 쓰는 틀이에요. 원하는 물건을 앞에 넣으면 돼요.",
++        "zh": "最常用的句型。把想要的东西放在前面就行。"
++      },
++      "words": [
++        {
++          "ko": "물",
++          "meaning": {
++            "en": "water",
++            "ko": "물",
++            "zh": "水"
++          }
++        },
++        {
++          "ko": "영수증",
++          "meaning": {
++            "en": "the receipt",
++            "ko": "영수증",
++            "zh": "收据"
++          }
++        },
++        {
++          "ko": "봉투",
++          "meaning": {
++            "en": "a bag",
++            "ko": "봉투",
++            "zh": "袋子"
++          }
++        },
++        {
++          "ko": "메뉴판",
++          "meaning": {
++            "en": "the menu",
++            "ko": "메뉴판",
++            "zh": "菜单"
++          }
++        },
++        {
++          "ko": "앞접시",
++          "meaning": {
++            "en": "a small plate",
++            "ko": "앞접시",
++            "zh": "小盘子"
++          }
++        },
++        {
++          "ko": "물티슈",
++          "meaning": {
++            "en": "a wet wipe",
++            "ko": "물티슈",
++            "zh": "湿巾"
++          }
++        }
++      ]
++    },
++    {
++      "id": "have",
++      "pattern": "{N} 있어요?",
++      "meaning": {
++        "en": "Do you have {N}?",
++        "ko": "○○ 있어요?",
++        "zh": "有{N}吗？"
++      },
++      "tip": {
++        "en": "Use it in shops and restaurants. The answer is 있어요 (yes) or 없어요 (no).",
++        "ko": "가게·식당에서 써요. 대답은 있어요(있음) 또는 없어요(없음).",
++        "zh": "在商店、餐厅用。回答是 있어요（有）或 없어요（没有）。"
++      },
++      "words": [
++        {
++          "ko": "와이파이",
++          "meaning": {
++            "en": "Wi-Fi",
++            "ko": "와이파이",
++            "zh": "Wi-Fi"
++          }
++        },
++        {
++          "ko": "충전기",
++          "meaning": {
++            "en": "a charger",
++            "ko": "충전기",
++            "zh": "充电器"
++          }
++        },
++        {
++          "ko": "영어 메뉴",
++          "meaning": {
++            "en": "an English menu",
++            "ko": "영어 메뉴",
++            "zh": "英文菜单"
++          }
++        },
++        {
++          "ko": "큰 사이즈",
++          "meaning": {
++            "en": "a bigger size",
++            "ko": "큰 사이즈",
++            "zh": "大号"
++          }
++        },
++        {
++          "ko": "빈자리",
++          "meaning": {
++            "en": "a free seat",
++            "ko": "빈자리",
++            "zh": "空位"
++          }
++        }
++      ]
++    },
++    {
++      "id": "where",
++      "pattern": "{N} 어디예요?",
++      "meaning": {
++        "en": "Where is {N}?",
++        "ko": "○○ 어디예요?",
++        "zh": "{N}在哪里？"
++      },
++      "tip": {
++        "en": "Point and say it. People will often show you the way.",
++        "ko": "찾는 곳 이름만 넣으면 돼요.",
++        "zh": "只要放入要找的地方名称就行。"
++      },
++      "words": [
++        {
++          "ko": "화장실",
++          "meaning": {
++            "en": "the restroom",
++            "ko": "화장실",
++            "zh": "洗手间"
++          }
++        },
++        {
++          "ko": "출구",
++          "meaning": {
++            "en": "the exit",
++            "ko": "출구",
++            "zh": "出口"
++          }
++        },
++        {
++          "ko": "지하철역",
++          "meaning": {
++            "en": "the subway station",
++            "ko": "지하철역",
++            "zh": "地铁站"
++          }
++        },
++        {
++          "ko": "엘리베이터",
++          "meaning": {
++            "en": "the elevator",
++            "ko": "엘리베이터",
++            "zh": "电梯"
++          }
++        },
++        {
++          "ko": "계산대",
++          "meaning": {
++            "en": "the checkout",
++            "ko": "계산대",
++            "zh": "收银台"
++          }
++        },
++        {
++          "ko": "약국",
++          "meaning": {
++            "en": "a pharmacy",
++            "ko": "약국",
++            "zh": "药店"
++          }
++        }
++      ]
++    },
++    {
++      "id": "can",
++      "pattern": "{N} 돼요?",
++      "meaning": {
++        "en": "Can I {N}?",
++        "ko": "○○ 돼요?",
++        "zh": "可以{N}吗？"
++      },
++      "tip": {
++        "en": "돼요? asks if something is possible. Answer: 돼요 (yes) / 안 돼요 (no).",
++        "ko": "돼요?는 할 수 있는지 묻는 말이에요. 대답: 돼요 / 안 돼요.",
++        "zh": "돼요? 是问能不能做。回答：돼요（可以）/ 안 돼요（不行）。"
++      },
++      "words": [
++        {
++          "ko": "카드",
++          "meaning": {
++            "en": "pay by card",
++            "ko": "카드",
++            "zh": "刷卡"
++          }
++        },
++        {
++          "ko": "포장",
++          "meaning": {
++            "en": "get it to go",
++            "ko": "포장",
++            "zh": "打包"
++          }
++        },
++        {
++          "ko": "환불",
++          "meaning": {
++            "en": "get a refund",
++            "ko": "환불",
++            "zh": "退款"
++          }
++        },
++        {
++          "ko": "교환",
++          "meaning": {
++            "en": "exchange it",
++            "ko": "교환",
++            "zh": "换货"
++          }
++        },
++        {
++          "ko": "배달",
++          "meaning": {
++            "en": "get it delivered",
++            "ko": "배달",
++            "zh": "送货"
++          }
++        }
++      ]
++    },
++    {
++      "id": "price",
++      "pattern": "{N} 얼마예요?",
++      "meaning": {
++        "en": "How much is {N}?",
++        "ko": "○○ 얼마예요?",
++        "zh": "{N}多少钱？"
++      },
++      "tip": {
++        "en": "Practice the answer with the Numbers tool.",
++        "ko": "대답(가격)은 숫자·가격 듣기 도구로 연습하세요.",
++        "zh": "回答（价格）可以用数字·价格听力工具练习。"
++      },
++      "words": [
++        {
++          "ko": "이거",
++          "meaning": {
++            "en": "this",
++            "ko": "이거",
++            "zh": "这个"
++          }
++        },
++        {
++          "ko": "배달비",
++          "meaning": {
++            "en": "the delivery fee",
++            "ko": "배달비",
++            "zh": "配送费"
++          }
++        },
++        {
++          "ko": "보증금",
++          "meaning": {
++            "en": "the deposit",
++            "ko": "보증금",
++            "zh": "押金"
++          }
++        },
++        {
++          "ko": "입장료",
++          "meaning": {
++            "en": "the entrance fee",
++            "ko": "입장료",
++            "zh": "门票"
++          }
++        }
++      ]
++    },
++    {
++      "id": "without",
++      "pattern": "{N} 빼 주세요",
++      "meaning": {
++        "en": "Without {N}, please.",
++        "ko": "○○ 빼 주세요",
++        "zh": "请不要放{N}。"
++      },
++      "tip": {
++        "en": "Use it when ordering food or drinks.",
++        "ko": "음식·음료를 주문할 때 써요.",
++        "zh": "点餐或点饮料时用。"
++      },
++      "words": [
++        {
++          "ko": "고수",
++          "meaning": {
++            "en": "cilantro",
++            "ko": "고수",
++            "zh": "香菜"
++          }
++        },
++        {
++          "ko": "얼음",
++          "meaning": {
++            "en": "ice",
++            "ko": "얼음",
++            "zh": "冰"
++          }
++        },
++        {
++          "ko": "오이",
++          "meaning": {
++            "en": "cucumber",
++            "ko": "오이",
++            "zh": "黄瓜"
++          }
++        },
++        {
++          "ko": "양파",
++          "meaning": {
++            "en": "onion",
++            "ko": "양파",
++            "zh": "洋葱"
++          }
++        }
++      ]
++    },
++    {
++      "id": "go",
++      "pattern": "{N}(으)로 가 주세요",
++      "meaning": {
++        "en": "Please go to {N}.",
++        "ko": "○○(으)로 가 주세요",
++        "zh": "请去{N}。"
++      },
++      "tip": {
++        "en": "For taxis. After a final consonant say 으로 (서울역으로). After a vowel or ㄹ say 로 (호텔로).",
++        "ko": "택시에서 써요. 받침이 있으면 으로(서울역으로), 받침이 없거나 ㄹ 받침이면 로(호텔로).",
++        "zh": "坐出租车时用。有收音用 으로（서울역으로），没有收音或收音是ㄹ用 로（호텔로）。"
++      },
++      "words": [
++        {
++          "ko": "서울역",
++          "meaning": {
++            "en": "Seoul Station",
++            "ko": "서울역",
++            "zh": "首尔站"
++          }
++        },
++        {
++          "ko": "인천공항",
++          "meaning": {
++            "en": "Incheon Airport",
++            "ko": "인천공항",
++            "zh": "仁川机场"
++          }
++        },
++        {
++          "ko": "호텔",
++          "meaning": {
++            "en": "the hotel",
++            "ko": "호텔",
++            "zh": "酒店"
++          }
++        },
++        {
++          "ko": "이 주소",
++          "meaning": {
++            "en": "this address",
++            "ko": "이 주소",
++            "zh": "这个地址"
++          }
++        },
++        {
++          "ko": "여기",
++          "meaning": {
++            "en": "here",
++            "ko": "여기",
++            "zh": "这里"
++          }
++        }
++      ]
++    },
++    {
++      "id": "more",
++      "pattern": "{N} 더 주세요",
++      "meaning": {
++        "en": "More {N}, please.",
++        "ko": "○○ 더 주세요",
++        "zh": "请再给我一些{N}。"
++      },
++      "tip": {
++        "en": "Use it to ask for a refill at a restaurant.",
++        "ko": "식당에서 더 달라고 할 때 써요.",
++        "zh": "在餐厅要求再添时用。"
++      },
++      "words": [
++        {
++          "ko": "물",
++          "meaning": {
++            "en": "water",
++            "ko": "물",
++            "zh": "水"
++          }
++        },
++        {
++          "ko": "반찬",
++          "meaning": {
++            "en": "side dishes",
++            "ko": "반찬",
++            "zh": "小菜"
++          }
++        },
++        {
++          "ko": "김치",
++          "meaning": {
++            "en": "kimchi",
++            "ko": "김치",
++            "zh": "泡菜"
++          }
++        },
++        {
++          "ko": "밥",
++          "meaning": {
++            "en": "rice",
++            "ko": "밥",
++            "zh": "米饭"
++          }
++        }
++      ]
++    }
++  ]
++}
+diff --git a/data/tools.json b/data/tools.json
+index be59ac7..e4a007a 100644
+--- a/data/tools.json
++++ b/data/tools.json
+@@ -248,5 +248,10 @@
+     "name": {"en":"Send a Parcel in Korea","ko":"국내 택배 보내기","zh":"韩国国内寄快递"},
+     "description": {"en":"Pick the weight and see the cheapest way to send a parcel within Korea: convenience store or post office.","ko":"무게를 고르면 국내 택배를 가장 싸게 보내는 방법(편의점·우체국)과 요금을 보여줘요.","zh":"选择重量，看看在韩国国内寄快递最便宜的方式（便利店或邮局）和费用。"},
+     "seo": { "title": {"en":"Send a Parcel in Korea: Convenience Store vs Post Office","ko":"국내 택배 보내기: 편의점 반값택배 vs 우체국 소포 요금","zh":"在韩国寄快递：便利店半价快递和邮局包裹对比"},
+-      "description": {"en":"Prices by weight for GS25 and CU half-price delivery and Korea Post parcels (counter and home pickup), how to send, and Korean phrases for staff.","ko":"GS25·CU 반값택배와 우체국 소포(창구·방문접수)의 무게별 요금, 보내는 순서, 직원에게 보여줄 한국어 문장.","zh":"GS25、CU半价快递和韩国邮局包裹（窗口、上门取件）按重量的费用、寄件步骤，以及给工作人员看的韩语句子。"} } }
++      "description": {"en":"Prices by weight for GS25 and CU half-price delivery and Korea Post parcels (counter and home pickup), how to send, and Korean phrases for staff.","ko":"GS25·CU 반값택배와 우체국 소포(창구·방문접수)의 무게별 요금, 보내는 순서, 직원에게 보여줄 한국어 문장.","zh":"GS25、CU半价快递和韩国邮局包裹（窗口、上门取件）按重量的费用、寄件步骤，以及给工作人员看的韩语句子。"} } },
++  { "slug": "sentence-patterns", "icon": "🧩", "category": "learn-korean", "status": "live", "popular": false,
++    "name": { "en": "Korean Sentence Patterns", "ko": "문장 틀로 말하기", "zh": "韩语句型练习" },
++    "description": { "en": "8 simple patterns like ○○ 주세요. Swap in a word and say your own sentence.", "ko": "○○ 주세요 같은 문장 틀 8개에 단어를 바꿔 넣어 내 문장을 만들어요.", "zh": "8个简单句型（如 ○○ 주세요），换上单词说出自己的句子。" },
++    "seo": { "title": { "en": "Easy Korean Sentence Patterns: 주세요, 있어요?, 어디예요?", "ko": "쉬운 한국어 문장 틀: 주세요, 있어요?, 어디예요?", "zh": "简单韩语句型：주세요、있어요?、어디예요?" },
++      "description": { "en": "Build your own Korean sentences for shops, restaurants and taxis: pick a pattern, swap in a word, and hear it.", "ko": "가게·식당·택시에서 쓰는 문장을 직접 만들어요: 틀을 고르고 단어를 바꿔 넣고 들어 봐요.", "zh": "为商店、餐厅和出租车自己造韩语句子：选句型，换单词，听发音。" } } }
+ ]
+diff --git a/lib/particle.ts b/lib/particle.ts
+new file mode 100644
+index 0000000..a8e47ad
+--- /dev/null
++++ b/lib/particle.ts
+@@ -0,0 +1,13 @@
++// 받침에 따라 붙는 말(조사)을 골라요. 한글 음절 코드: (코드 - 0xAC00) % 28 = 받침 번호 (0 = 받침 없음, 8 = ㄹ)
++export function finalConsonantIndex(word: string): number {
++  const last = word.trim().slice(-1);
++  const code = last.charCodeAt(0) - 0xac00;
++  if (code < 0 || code > 11171) return 0; // 한글이 아니면 받침 없음으로 봐요
++  return code % 28;
++}
++
++// (으)로: 받침이 있으면 "으로", 받침이 없거나 ㄹ 받침이면 "로"
++export function withEuro(word: string): string {
++  const f = finalConsonantIndex(word);
++  return word + (f === 0 || f === 8 ? "로" : "으로");
++}
+diff --git a/lib/text-registry.ts b/lib/text-registry.ts
+index bab5d94..3052744 100644
+--- a/lib/text-registry.ts
++++ b/lib/text-registry.ts
+@@ -43,6 +43,7 @@ import plan from "@/data/plan.json";
+ import priceGuide from "@/data/price-guide.json";
+ import reentryPermit from "@/data/reentry-permit.json";
+ import rent from "@/data/rent.json";
++import sentencePatterns from "@/data/sentence-patterns.json";
+ import tools from "@/data/tools.json";
+ import transfer from "@/data/transfer.json";
+ import trash from "@/data/trash.json";
+@@ -112,6 +113,7 @@ const DATA_FILES: Record<string, unknown> = {
+   "price-guide.json": priceGuide,
+   "reentry-permit.json": reentryPermit,
+   "rent.json": rent,
++  "sentence-patterns.json": sentencePatterns,
+   "tools.json": tools,
+   "transfer.json": transfer,
+   "trash.json": trash,
+@@ -156,6 +158,7 @@ const DATA_GROUP: Record<string, string> = {
+   "places.json": "foreigner-friendly-map",
+   "reentry-permit.json": "reentry-permit",
+   "rent.json": "area-rent-guide",
++  "sentence-patterns.json": "sentence-patterns",
+   "transfer.json": "money-transfer",
+   "trash.json": "trash-sorting",
+   "unemployment.json": "unemployment-benefits",
+-- 
+2.43.0
+

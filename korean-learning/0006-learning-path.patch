@@ -1,0 +1,137 @@
+From 0364db2cc8da1859db3c1ed1cc55908099f8f70e Mon Sep 17 00:00:00 2001
+From: gyeotjari <gyeotjari@users.noreply.github.com>
+Date: Wed, 25 Nov 2026 00:36:11 +0000
+Subject: [PATCH 6/6] =?UTF-8?q?=ED=95=9C=EA=B5=AD=EC=96=B4=20=EC=B9=B4?=
+ =?UTF-8?q?=ED=85=8C=EA=B3=A0=EB=A6=AC:=20'=EC=B2=98=EC=9D=8C=EC=9D=B4?=
+ =?UTF-8?q?=EB=9D=BC=EB=A9=B4=20=EC=9D=B4=20=EC=88=9C=EC=84=9C=EB=A1=9C'?=
+ =?UTF-8?q?=20=ED=95=99=EC=8A=B5=20=EC=88=9C=EC=84=9C=20=EC=95=88=EB=82=B4?=
+ =?UTF-8?q?=20=EC=83=81=EC=9E=90=20(=EC=8B=9C=EC=A0=9C=ED=92=88)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ app/[lang]/[category]/page.tsx | 20 +++++++++++++++++++-
+ data/categories.json           |  3 ++-
+ lib/data.ts                    |  2 ++
+ messages/en.json               |  3 ++-
+ messages/ko.json               |  3 ++-
+ messages/zh.json               |  3 ++-
+ 6 files changed, 29 insertions(+), 5 deletions(-)
+
+diff --git a/app/[lang]/[category]/page.tsx b/app/[lang]/[category]/page.tsx
+index df39a50..8ddbe72 100644
+--- a/app/[lang]/[category]/page.tsx
++++ b/app/[lang]/[category]/page.tsx
+@@ -3,7 +3,7 @@ import { seo, SITE_URL } from "@/lib/seo";
+ import Link from "next/link";
+ import { notFound } from "next/navigation";
+ import { getDict, locales, pick, type Locale } from "@/lib/i18n";
+-import { categories, getCategory, toolsInCategory } from "@/lib/data";
++import { categories, getCategory, getTool, toolsInCategory, type Tool } from "@/lib/data";
+ import { ToolCard } from "@/components/ToolCard";
+ 
+ export const dynamicParams = false;
+@@ -30,6 +30,7 @@ export default async function CategoryPage({ params }: PageProps<"/[lang]/[categ
+   const list = toolsInCategory(c.id).sort((a, b) => (a.status === "live" ? 0 : 1) - (b.status === "live" ? 0 : 1));
+   // 이 단계에서 할 일 안내 두 문장 (messages/*.json의 category.intro, 없으면 안 보여요)
+   const intro = (dict.category.intro as Record<string, string> | undefined)?.[c.id];
++  const path = (c.path ?? []).map((slug) => getTool(slug)).filter((t): t is Tool => t?.status === "live");
+   // 구글에 알려 주는 이동 경로(첫 화면 › 카테고리). 화면에는 안 보여요 (도구 페이지의 ToolLayout과 같은 방식).
+   const breadcrumbJsonLd = {
+     "@context": "https://schema.org",
+@@ -57,6 +58,23 @@ export default async function CategoryPage({ params }: PageProps<"/[lang]/[categ
+         <p className="mt-1 text-muted">{pick(c.description, lang)}</p>
+         {intro && <p className="mt-3 leading-relaxed">{intro}</p>}
+       </header>
++      {/* 처음 온 사람을 위한 추천 순서 (categories.json의 path) */}
++      {path.length > 0 && (
++        <section className="rounded-2xl border border-line bg-brand-soft p-4">
++          <h2 className="font-bold">🧭 {dict.category.pathTitle}</h2>
++          <ol className="mt-2 space-y-1">
++            {path.map((t, i) => (
++              <li key={t.slug}>
++                <Link href={`/${lang}/tools/${t.slug}`} className="flex items-center gap-2 rounded-lg py-1 font-semibold hover:text-brand">
++                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-xs text-brand-ink">{i + 1}</span>
++                  <span aria-hidden>{t.icon}</span>
++                  {pick(t.name, lang)}
++                </Link>
++              </li>
++            ))}
++          </ol>
++        </section>
++      )}
+       {list.length === 0 ? (
+         <p className="text-muted">{dict.category.empty}</p>
+       ) : (
+diff --git a/data/categories.json b/data/categories.json
+index 5e2410f..6dcdf34 100644
+--- a/data/categories.json
++++ b/data/categories.json
+@@ -39,6 +39,7 @@
+     "id": "learn-korean",
+     "icon": "🗣️",
+     "name": { "en": "Learn Korean", "ko": "한국어", "zh": "学韩语" },
+-    "description": { "en": "Phrases you can use today", "ko": "오늘 바로 쓰는 한국어", "zh": "今天就能用的韩语" }
++    "description": { "en": "Phrases you can use today", "ko": "오늘 바로 쓰는 한국어", "zh": "今天就能用的韩语" },
++    "path": ["hangul-reader", "korean-numbers", "survival-phrases", "sentence-patterns", "korean-politeness", "daily-quiz"]
+   }
+ ]
+diff --git a/lib/data.ts b/lib/data.ts
+index 8d6c07f..b36a095 100644
+--- a/lib/data.ts
++++ b/lib/data.ts
+@@ -13,6 +13,8 @@ export type Category = {
+   icon: string;
+   name: Localized;
+   description: Localized;
++  // 처음 온 사람에게 권하는 도구 순서 (있는 카테고리만 "이 순서로 해 보세요" 상자를 보여줘요)
++  path?: string[];
+ };
+ 
+ export type Tool = {
+diff --git a/messages/en.json b/messages/en.json
+index 487eb71..c7a9f8b 100644
+--- a/messages/en.json
++++ b/messages/en.json
+@@ -47,7 +47,8 @@
+       "daily-life": "Everyday things that work differently in Korea: sorting trash, choosing a hospital or pharmacy, emergency numbers, holidays and the apps locals use.",
+       "work-study": "Check your pay and your contract before problems start. Estimate your take-home pay and severance pay, and check your work contract before you sign.",
+       "learn-korean": "Short, practical Korean for real situations: read Hangul signs, say numbers and prices, and show ready-made phrases to staff."
+-    }
++    },
++    "pathTitle": "New to Korean? Try this order"
+   },
+   "tool": {
+     "about": "About this tool",
+diff --git a/messages/ko.json b/messages/ko.json
+index 802564b..99d9c69 100644
+--- a/messages/ko.json
++++ b/messages/ko.json
+@@ -47,7 +47,8 @@
+       "daily-life": "한국에서 방식이 다른 일상: 분리배출, 병원·약국 고르기, 긴급 전화번호, 공휴일, 한국 사람들이 쓰는 앱.",
+       "work-study": "문제가 생기기 전에 월급과 계약서를 확인하세요. 실제 받는 월급과 퇴직금을 계산하고, 서명 전에 근로계약서를 점검해요.",
+       "learn-korean": "실제 상황에서 바로 쓰는 짧은 한국어: 한글 간판 읽기, 숫자·가격 말하기, 직원에게 보여 줄 문장."
+-    }
++    },
++    "pathTitle": "처음이라면 이 순서로 해 보세요"
+   },
+   "tool": {
+     "about": "이 도구에 대해",
+diff --git a/messages/zh.json b/messages/zh.json
+index 646ac31..f3f76a3 100644
+--- a/messages/zh.json
++++ b/messages/zh.json
+@@ -47,7 +47,8 @@
+       "daily-life": "在韩国做法不同的日常事情：垃圾分类、选医院和药店、紧急电话、公休日，以及韩国人常用的应用。",
+       "work-study": "在出问题之前先确认工资和合同。计算实际到手工资和离职金，签字前检查劳动合同。",
+       "learn-korean": "真实场景中马上能用的简短韩语：看懂韩文招牌、说数字和价格、给店员看的现成句子。"
+-    }
++    },
++    "pathTitle": "刚开始学？按这个顺序试试"
+   },
+   "tool": {
+     "about": "关于此工具",
+-- 
+2.43.0
+
